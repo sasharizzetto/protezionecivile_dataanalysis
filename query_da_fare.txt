@@ -1,0 +1,17 @@
+Query interessanti:
+
+Mappa/heatmap delle attività nei comuni
+istogramma con attività per ogni unità di tempo (mese, anno)
+istogramma con numero di attività per ogni persona
+boxplot con numero di disponibilità per ogni mese
+lineplot con quantità di consumabili in magazzino (una linea per consumabile)
+istogramma con numero persone per abilitazione
+numero medio abilitazioni per persona nel tempo
+istogramma con numero abilitazioni per persona, ordinate
+grafico a torta con quantità dei consumabili
+grafico a barre con rotture nel tempo
+lineplot con numero medio di persone esterne per ogni attività, nel tempo
+grafico a barre con num persone + esterne (barre di due colori) per ogni attività
+lineplot con una linea per persona (se non sono tante), con il numero di attività nel tempo
+stessa cosa col numero di disponibilità
+lineplot per ogni attività con numero persone iscritte nel tempo
