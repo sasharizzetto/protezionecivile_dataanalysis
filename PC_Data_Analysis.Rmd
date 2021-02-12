@@ -1,0 +1,59 @@
+---
+title: "PC_Data_Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#TODO: settare UTF8
+library(RPostgreSQL)
+library(DT)
+library(tidyverse)
+
+con <- DBI::dbConnect(RPostgreSQL::PostgreSQL(), 
+                      host = "0.tcp.ngrok.io",
+                      port = "12696",
+                      dbname = "pc", 
+                      user = "postgres",
+                      password = "postgres")
+                      #password = rstudioapi::askForPassword("postgres"))
+
+# tb %>% show_query()
+
+#tb %>% left_join(tbl(con, "attivita_completata")) %>% show_query()
+
+
+```
+
+# 1. ATTIVITA PER COMUNE
+```{r}
+
+att_per_comune = tbl(con, "attivita_completata") %>% 
+  right_join(tbl(con, "attivita_in_comune")) %>% 
+  count(nome_comune, sort=TRUE) %>% 
+  collect()
+
+datatable(att_per_comune)
+```
+
+## I primi 10 comuni per attività
+```{r}
+att_per_comune %>% 
+  top_n(10) %>% 
+  ggplot(aes(x=reorder(nome_comune, n), y=n, fill = nome_comune)) + 
+  geom_bar(stat = 'identity') + 
+  guides(fill=FALSE) + 
+  labs(title="I primi 10 comuni per attività", x = "Numero attività", y = "Comune") +
+  coord_flip()
+```
+
+## Gli ultimi 10 comuni per attività
+```{r}
+att_per_comune %>% 
+  top_n(-10) %>% 
+  ggplot(aes(x=reorder(nome_comune, -n), y=n, fill = nome_comune)) + 
+  geom_bar(stat = 'identity') + 
+  guides(fill=FALSE) + 
+  labs(title="Gli ultimi 10 comuni per attività", x = "Numero attività", y = "Comune") +
+  coord_flip()
+```

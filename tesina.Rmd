@@ -1,0 +1,492 @@
+---
+title: "Corrado Alessio - Mintos investment analysis"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+In questo lavoro verrà analizzato l'investimento da me effettuato sulla piattaforma *Mintos*. 
+
+## Cos'è *Mintos*
+
+*Mintos* è una piattaforma online di *peer-to-peer lending* (p2p). Questo tipo di invesimento consiste nel prestito di capitale tra privati, che viene restituito assieme agli interessi sotto forma di rate periodiche. È un metodo di finanziamento alternativo al classico "prestito in banca". Si differenzia dal *peer-to-business lending* in quanto i beneficiari del capitale sono persone e non società. Il beneficio da parte dei richiedenti è che è possibile ricevere prestiti a condizioni vantaggiose rispetto ai canali tradizionali, il beneficio da parte degli investitori è la possibilità di ottenere una rendita da capitale con tasso di interesse elevato e rischio moderato. 
+
+## Cash flow sulla piattaforma Mintos
+
+* Il richiedente ottiene un prestito da una delle società finanziarie affiliate con Mintos, denominate *Loan Originators*;
+* Il loan originator pubblica su Mintos i dati relativi al finanziamento, comprensivi di tasso di interesse, scheduling delle rate, dati del contraente e dettagli aggiuntivi;
+* L'investitore, tramite Mintos, acquista una percentuale di proprietà del prestito;
+* Il richiedente paga le rate al loan originator, che si occupa di tutto;
+* Ad ogni rata il loan originator distribuisce agli investitori le relative quote, comprensive di interessi, afferenti al quel prestito;
+
+
+![Dettagli di un prestito pubblicato sulla piattaforma](imgs/loan-details-main.png)
+
+
+![Dettagli del contraente](imgs/loan-details-borrower.png)
+
+
+![Rate del prestito](imgs/loan-details-schedule.png)
+
+![Quota rimanente e quote degli investitori](imgs/loan-details-investments.png)
+
+## I fondi dell'investitore sono ripartiti tra
+
+* Fondi investiti (*Invested funds*)
+* Rate pagate ma non ancora trasferite dai *loan originators* a *Mintos* (*Pending payments*)
+* Fondi liberi (*Available funds*)
+
+
+```{r, results='hide'}
+#setwd("~/Dropbox/mintos/dataset")
+
+library(plyr)
+library(dplyr)
+library(gtools)
+library(lubridate)
+library(readr)
+library(tibble)
+library(tidyr)
+library(readxl)
+library(ggplot2)
+library(stringr)
+library(viridis)
+library(gganimate)
+library(ggrepel)
+library(dbplyr)
+library(RSQLite)
+library(gifski)
+library(DT)
+#library(quantreg)
+
+conn = DBI::dbConnect(RSQLite::SQLite(), dbname = "loan_book.sqlite3")
+
+statement = read_excel("account-statement.xlsx") %>% arrange(Date) %>% drop_na(Date)
+current = read_excel("current-investments.xlsx")
+finished = read_excel("finished-investments.xlsx")
+
+date_interval = statement %>% select(Date) %>% mutate(Date = as.Date(Date)) %>% summarise(min = min(Date), max = max(Date))
+
+all = bind_rows(current %>% mutate(Category = "Current"), finished %>% mutate(Category = "Finished"))
+
+orderStatus = function(var){
+  return(factor(var, levels = c("Current", "Grace Period", "1-15 Days  Late", "16-30 Days  Late", "31-60 Days Late")))
+}
+```
+
+Analizziamo la composizione attuale dei fondi da me investiti sulla piattaforma. 
+
+```{r}
+data = rbind(all %>% summarise(Name = "Invested Funds", Val = sum(`Outstanding Principal`)), 
+             all %>% summarise(Name = "Pending payments", Val = sum(`Pending Payments`)),
+             all %>% summarise(Name = "Available Funds", Val = 0))
+
+ggplot(data, aes(x = "", y = Val, fill = Name)) +
+  geom_col() +
+  geom_text(aes(label = paste0(Val, " EUR")),
+            position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal(base_size = 16) +
+  ylab("Amount") +
+  xlab(NULL) 
+
+```
+
+
+#### Mintos consente di investire sia in *EUR* che in valuta estera. Per semplicità questo studio si focalizzerà solamente sugli investimenti in *EUR*. 
+
+# Mercati
+
+## I prestiti possono essere scambiati sia sul mercato primario che secondario
+
+* Nel **mercato primario** gli investitori comprano quote dei prestiti dai *loan originator*;
+* Nel **mercato secondario** gli investitori comprano e vendono quote dei prestiti ad altri investitori. Il venditore può applicare un *discount* o *markup* sul prezzo di vendita;
+
+Il mercato primario è la fonte dei prestiti, il mercato secondario è utilizzato dagli investitori per *liquidare* il proprio portafoglio o *aumentare i profitti* comprando prestiti a sconto. 
+
+
+![Mercato primario](imgs/primary-market.png)
+
+![Mercato secondario](imgs/secondary-market.png)
+
+## Analizziamo le dimensioni dei mercati. 
+
+**YTM** (*Yeld To Maturity*) indica l'interesse annuo percentuale considerando il discount/markup e presupponendo che termini senza ritardo. 
+
+![Prestiti listati sul mercato primario](imgs/primary-market-available.png)
+
+![Prestiti listati sul mercato secondario](imgs/secondary-market-available.png)
+
+Il mercato primario ha una capitale totale di *60 milioni* mentre quello secondario di *20 milioni* (in EUR).
+
+# Rating dei Loan Originator
+
+### Mintos valuta ciascun Loan Originator mediante uno score, il *Mintos Score*. 
+* A+, A, A-: estremamente solido, probabilità di default minima;
+* B+, B, B-: mediamente solido. Capitalizzazione ridotta, profilo di rischio dei clienti o altri fattori contribuiscono ad una piccola probabilità di default.
+* C+, C, C-: fragile. Capitalizzazione estremamente ridotta, problemi di liquidità o altri fattori contribuiscono ad una probabilità di default modesta. 
+* D: default. La società è insolvente oppure presenta gravi problemi di stabilità.  
+
+
+Lista di alcuni Loan Originator con relativo Mintos Score.
+```{r}
+datatable(tbl(conn, "loans") %>% select(`Loan Originator`, `Mintos Score`) %>% distinct() %>% arrange(`Mintos Score`, `Loan Originator`) %>% collect())
+```
+
+
+# Analizziamo la composizione attuale del portafoglio
+
+```{r}
+datatable(current)
+```
+
+
+## Come sono distribuiti i prestiti rispetto ai Loan Originator? 
+
+```{r, fig.width=8, fig.height=8}
+ggplot(current %>% group_by(`Lending Company`) %>% summarise(Outstanding = sum(`Outstanding Principal`)), 
+  aes(x="", y=Outstanding, fill=`Lending Company`))+
+  geom_bar(stat="identity", width=1, color="white") +
+  geom_text_repel(aes(label = `Lending Company`, x = 1.3),
+            position = position_stack(vjust = 0.5), size = 4) +
+  coord_polar("y") +
+  guides(fill = FALSE) +
+  theme_void()
+```
+
+I loan originator con più investimenti attivi sono *Mogo* (A) e *IuteCredit* (B+). La distribuzione degli investimenti è sufficientemente eterogenea, nessuno ha una particolare dominanza. 
+
+
+## Status dei prestiti 
+
+### Ogni prestito è classificabile in uno di questi stati:
+* Current: tutte le rate sono state pagate;
+* Grace period: ritardo di alcuni giorni, compatibile con i tempi tecnici di trasferimento bancari;
+* 1-15 days late;
+* 15-30 days late;
+* 30-60 days late;
+* 60+ days late;
+* Default: il debitore è in default ma c'è ancora una reale possibilità che il capitale venga recuperato;
+* Bad debd: il capitale è perso; 
+
+Esaminiamo lo stato dei prestiti in portafoglio.
+
+```{r}
+ggplot(current %>% group_by(`Status`) %>% summarise(Outstanding = sum(`Outstanding Principal`)), 
+       aes(x="", y=Outstanding, fill=orderStatus(Status)))+
+  geom_bar(stat="identity", width=1, color="white") +
+  coord_polar("y", direction = -1) +
+  theme_void() +
+  labs(fill = "Status")
+```
+
+La maggior parte dei prestiti è nello stato current e solo una piccola parte è in grave ritardo. Confrontiamo lo stato del portafoglio rispetto allo stato di tutti i prestiti erogati negli ultimi mesi per un confronto.
+
+
+```{r}
+current_data = current %>% group_by(`Status`) %>% summarise(Outstanding = sum(`Outstanding Principal`)) %>% mutate(Type = "Current")
+
+loan_book_data = tbl(conn, "loans") %>% group_by(`Loan Status`) %>% summarise(Outstanding = sum(`Remaining Loan Amount`)) %>% mutate(`Status` = `Loan Status`, Type = "Loan book") %>% collect() %>% drop_na() %>% filter(str_detect(Status, "inished", negate = TRUE)) %>% mutate(Status = mapvalues(Status, from = c("Late 1-15", "Late 16-30", "Late 31-60", "Late 60+"), to = c("1-15 Days  Late", "16-30 Days  Late", "31-60 Days Late", "60+ Days Late")))
+
+data = bind_rows(current_data, loan_book_data)
+
+ggplot(data, aes(x = "", y = Outstanding, fill = orderStatus(Status) )) + 
+  geom_bar(stat = "identity", position = position_fill(), width=1, color="white") +
+  #geom_text(aes(label = `Outstanding`), position = position_fill(vjust = 0.5)) +
+  coord_polar(theta = "y", direction = -1) +
+  facet_wrap(~ Type)  +
+  theme_void() +
+  theme(legend.position='bottom')  +
+  labs(fill = "Status") 
+
+```
+
+Lo stato dei prestiti in portafoglio rispecchia quello dei prestiti erogati negli ultimi mesi, quindi è correttamente bilanciato. 
+
+Esaminiamo lo status dei prestiti per ciascun Loan originator, per verificare se ci dovesse essere qualche LO in particolare difficoltà. 
+
+```{r}
+
+ggplot(current %>% group_by(`Status`, `Lending Company`) %>% summarise(Outstanding = sum(`Outstanding Principal`)), aes(x = `Lending Company`, y = Outstanding, fill = orderStatus(Status))) +
+  geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
+  coord_flip() +
+  labs(fill = "Status")
+```
+
+
+Come prevedibile, la maggior parte del capitale in ritardo è associato ai Loan originators con maggiori investimenti in portafoglio. Una quota rilevante è relativa a *Mogo*, *Kviku*, *IuteCredit*, *IDF Eurasia*.
+
+La cospicua quantità di capitale in ritardo di *Mogo*, *Kviku*, *IuteCredit*, *IDF Eurasia* e *Watu Credit* dipende anche da una strategia di investimento che mira ad incrementare i profitti comprando a sconto prestiti in ritardo dal mercato secondario. 
+
+Approfondiamo verificando la quota di capitale in ritardo di ciascun loan originator rispetto al capitale in esso investito.
+
+```{r}
+ggplot(current %>% group_by(`Status`, `Lending Company`) %>% summarise(Outstanding = sum(`Outstanding Principal`)), aes(x = `Lending Company`, y = Outstanding, fill = orderStatus(Status))) +
+  geom_bar(stat = "identity", position = position_fill(reverse = TRUE)) +
+  coord_flip() +
+  labs(fill = "Status")
+```
+
+
+Pur avendo un capitale investito estremamente ridotto, tutti i prestiti relativi a *Credissimo*, *Creditstar* e *Evergreen Finance* sono in grave ritardo. 
+
+La situazione di *CashCredit*, *Watu Credit*, *IDF Eurasia*, *Finclusion* e *Kviku* deve essere monitorata in modo approfondito in quanto presentano consistenti quote di ritardo. 
+
+## Pending Payments
+
+Tutti gli investimenti con *Buyback guarantee* sono tutelati: se subiscono un ritardo superiore ai 60 giorni vengono riacquistati dal rispettivo Loan Originator al valore attuale. In questo modo parte del rischio di insolvenza da parte del debitore viene mitigato. La strategia di investimento del portafoglio opera *solamente su prestiti garantiti*. 
+
+Ciò non toglie che periodi di grave crisi potrebbero portare ad un incremento sostanziale dei prestiti in default, incidendo pesantemente sulla liquidità dei loan originator, in particolare quelli a bassa capitalizzazione e asset liquidi ridotti. Un loan originator in crisi di liquidità potrebbe riscontrare ritardi nei pagamenti a Mintos (*Pending Payments*) o persino andare in *default*. 
+
+Analizziamo quindi la quantità di Pending payments relativa a ciascun loan originator. 
+
+```{r, fig.width = 8, fig.height = 8}
+data = full_join(all %>% group_by(`Lending Company`, Category) %>% summarise(Pending = sum(`Pending Payments`)),
+                  all %>% group_by(`Lending Company`) %>% summarise(Investment = 
+                                                                      sum(`Outstanding Principal` + `Pending Payments`)),
+                 by = "Lending Company") %>% mutate(PendingPercent = 100 * Pending / max(0.001, Investment))
+datatable(data)
+
+    
+ggplot(data, aes(x = `Lending Company`, y = Pending, fill = Category)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  ylab("Pending payments (EUR)")
+```
+
+La maggior parte dei Pending payments è relativa a *Watu credit* e *ID Finance*, per quanto riguarda in prestiti terminati, e a *Kredit Pintar*, *Iute Credit* e *Akulaku*, per quanto riguarda prestiti in corso. 
+
+La situazione di *ID Finance* è dovuta particolarmente a un grave drop dei tassi di cambio tra valute che, unito alle moratorie imposte da alcuni governi a seguito del covid-19, ha causato consistenti perdite alla compagnia. 
+
+*Akulaku* ha svolto positivamente una serie di trattative con Mintos per ristrutturare il suo debito con una serie di rate da pagare nei mesi a venire. 
+
+*Iute Credit* ha da poco effettuato una campagna di investimenti che ne ha ridotto temporaneamente la liquidità. Lo stato del suo portafoglio prestiti è buono e quindi dovrebbe rientrare ai livelli di normalità in breve tempo. 
+
+La situazione di *Watu credit* e *Kredit pintar* è sconosciuta e quindi va investigata. 
+
+```{r, fig.width = 8, fig.height = 8}
+ggplot(data, aes(x = `Lending Company`, y = PendingPercent, fill = Category)) +
+  geom_bar(stat = "identity") +
+  geom_hline(yintercept = 100, color = "red", linetype="dashed") +
+  geom_hline(yintercept = 20, color = "orange", linetype="dashed") +
+  geom_hline(yintercept = 10, color = "green", linetype="dashed") +
+  geom_hline(yintercept = 5, color = "blue", linetype="dashed") +
+  coord_flip() +
+  ylab("Pending payments (%)")
+```
+
+Dallo studio dei Pending payments percentuali si evince che quasi tutti i loan originator sono sotto la soglia del 5-10%, naturale per i tempi dei bonifici bancari internazionali. 
+
+La situazione di *Watu Credit* è critica e deve essere investigata al più presto. 
+
+*Kredit Pintar*, pur avendo una valore di pending payments in senso assoluto non trascurabile, ha un livello percentuale rispetto all'investimento totale nella normalità. Verrà comunque tenuto sotto osservazione. 
+
+*Akulaku* soffre dei problemi visti prima. 
+
+*Credissimo* è vicino alla soglia simbolica del 20% e va tenuto sotto osservazione. 
+
+Particolarmente critica è la situazione di *ID Finance*, *Aasa* e *GetBucks*. In particolare *GetBucks* ha di recente subito un downgrade del Mintos Score da *B* a *C+*. La strategia di investimento va modificata per escluderle. 
+
+
+## Tasso di interesse 
+
+Focalizziamoci ora sul rendimento del portafoglio.
+
+```{r}
+current %>% summarise(`Average Annual Interest Rate` = sum(`Interest Rate` * `My Investments`) / sum(`My Investments`))
+```
+
+Il tasso di interesse annuo (*NAR*) di questa tipologia di investimento è tra i più elevati. Ciò è dovuto da un livello di rischio moderato. 
+
+Esaminiamo ora la distribuzione dei tassi di interesse dei singoli prestiti, confrontando i prestiti attualmente in portafoglio, la totalità dei prestiti su cui ho investito e la totalità dei prestiti emessi nel mercato nel periodo in cui ho investito. 
+
+```{r}
+data = bind_rows(current %>% group_by(`Interest Rate`) %>% summarize(Weight = sum(`My Investments`)) %>% mutate(Category = "Current"),
+                 all %>% group_by(`Interest Rate`) %>% summarize(Weight = sum(`My Investments`)) %>% mutate(Category = "All"),
+                 dbGetQuery(conn, "select sum(`Loan Rate Percent`) as Weight, `Loan Rate Percent` as `Interest Rate`, 'Loan book' as Category from loans 
+ where Currency = 'EUR' group by `Interest Rate`;") )
+
+
+ggplot(data, aes(x = Category, y = `Interest Rate`, fill = Category, weight = Weight)) +
+  geom_violin() +
+  xlab(NULL) +
+  geom_boxplot(width = 0.1, show.legend = FALSE) +
+  scale_y_continuous(breaks = round(seq(floor(min(data$`Interest Rate`)), max(data$`Interest Rate`), by = 2),1))
+
+```
+
+Il NAR dei prestiti in portafoglio varia tra il 6% e 21.5%. La maggior parte si focalizza attorno alla fascia 9-13%. 
+
+Si sta formando una concentrazione attorno al 20% a seguito dell'incremento dei tassi di interesse dovuta al coronavirus. Ciò si vede da un ingrossamento della zona da *All* a *Current*. 
+
+##### La media dei tassi di interesse è maggiore a quella del portafoglio (15% vs 11%) in quanto:
+* l'incremento dei tassi di interesse è avvenuto principalmente nell'ultimo periodo;
+* la strategia di investimento considera solo investimenti con Mintos Score almeno B, che quindi hanno tassi di interesse più bassi ma maggiore sicurezza;
+* la strategia di investimento opera solo su prestiti garantiti;
+* la strategia di investimento predilige l'aquisto ad elevato sconto dal mercato secondario, in modo da avere un elevato *Yeld To Maturity* a scapito dell'*Interest Rate* ;
+
+Mostriamo per conferma l'andamento dei tassi di interesse annuali nell'ultimo periodo. 
+
+```{r}
+start = all %>% mutate(Date = `Date of Investment`) %>% select(Date, `Interest Rate`) %>%
+  mutate(Date = as.Date(Date, format = "%d.%m.%Y")) %>%
+  complete(Date = seq.Date(date_interval$min, date_interval$max, by="day"), `Interest Rate` = 0) %>% 
+  group_by(Date) %>%
+  summarise(n = n(), Interest = sum(`Interest Rate`)) %>%
+  mutate(nadd = cumsum(n), InterestAdd = cumsum(Interest)) %>% 
+  select(Date, nadd, InterestAdd)
+
+end = finished %>% mutate(Date = `Closing Date`) %>% select(Date, `Interest Rate`) %>%
+  mutate(Date = as.Date(Date, format = "%d.%m.%Y")) %>%
+  complete(Date = seq.Date(date_interval$min, date_interval$max, by="day"), `Interest Rate` = 0) %>% 
+  group_by(Date) %>%
+  summarise(n = n(), Interest = sum(`Interest Rate`)) %>%
+  mutate(nsub = cumsum(n), InterestSub = cumsum(Interest)) %>%
+  select(Date, nsub, InterestSub)
+
+investments = inner_join(start, end) %>% mutate(`Average NAR` = (InterestAdd - InterestSub) / (nadd - nsub)) %>%
+  select(Date, `Average NAR`) %>% mutate(Category = "Current Investments")
+
+loan_book = dbGetQuery(conn, "select date(`Listing Date`) as Date, avg(`Loan Rate Percent`) as `Average NAR`, 'Loan book' as Category
+           from loans where Currency = 'EUR' and Date is not NULL group by Date;") %>% mutate(Date = as.Date(Date))
+
+loan_book_buyback = dbGetQuery(conn, "select date(`Listing Date`) as Date, avg(`Loan Rate Percent`) as `Average NAR`, 'Loan book (buyback only)' as Category
+           from loans where Currency = 'EUR' and Buyback = 'Yes' and Date is not NULL group by Date;") %>% mutate(Date = as.Date(Date))
+      
+ggplot(rbind(loan_book, investments, loan_book_buyback)) + 
+  geom_line(aes(x = Date, y = `Average NAR`, col = `Category`)) +
+  xlab(NULL)
+```
+
+A seguito della diffusione del covid-19 si è verificato un drastico aumento nei tassi di interesse, in particolare a inizio febbraio e fine marzo. Ciò è dovuto dalla crescente difficoltà da parte dei loan originators di raccogliere finanziamenti, a seguito di un drastico calo della domanda degli investitori. L'andamento decrescente dell'ultimo mese indica che la situazione finanziaria del settore (e anche più in generale) si è stabilizzata ed è in fase di recupero. 
+
+Quali sono i loan originators che forniscono interessi più elevati? 
+
+
+
+```{r, fig.width=10,fig.height=16}
+
+data = dbGetQuery(conn, "select `Loan Originator`, sum(`Loan Rate Percent`) as Weight, `Loan Rate Percent` as `Interest Rate`, 'Loan book' as Category from loans where Currency = 'EUR' group by `Interest Rate`, `Loan Originator`;") 
+  
+ggplot(data) +
+  geom_violin(aes(x = `Loan Originator`, y = `Interest Rate`, weight = Weight)) +
+  coord_flip()
+```
+
+
+## Andamento dell'investimento
+
+Analizziamo il valore dell'investimento del tempo. 
+
+Come precedentemente detto consideriamo solo l'investimento in EUR. I valori quindi sono solo indicativi.  
+
+```{r}
+deposit = statement %>%
+  filter(str_detect(Details, "Deposits|Withdrawals")) %>% 
+  mutate(Date = as.Date(Date)) %>%
+  complete(Date = seq.Date(date_interval$min, date_interval$max, by="day"), Turnover=0) %>%
+  group_by(Date) %>% 
+  summarise(Turnover=sum(Turnover)) %>%
+  mutate(Category = "deposit")
+
+profit = statement %>% 
+  filter(str_detect(Details, "Deposits|investment|Invest|Principal|principal|Withdrawals|- seconda|Outgoin", negate = TRUE)) %>%
+  mutate(Date = as.Date(Date)) %>%
+  complete(Date = seq.Date(date_interval$min, date_interval$max, by="day"), Turnover=0) %>%
+  group_by(Date) %>% 
+  summarise(Turnover=sum(Turnover)) %>%
+  mutate(Category = "profit")
+
+data = bind_rows(profit, deposit)
+datatable(data)
+
+ggplot(data) + 
+  geom_area(mapping=aes(x = Date, y = cumsum(Turnover), fill = Category)) +
+  ylab("Total value (EUR)") +
+  xlab(NULL)
+```
+
+```{r}
+statement %>% 
+  filter(str_detect(Details, "Deposits|investment|Invest|Principal|principal|Withdrawals|- seconda|Outgoin", negate = TRUE)) %>%
+  summarise(`Profit (EUR)` = sum(`Turnover`))
+```
+
+Analizziamo la distribuzione delle transazioni nel tempo.
+
+```{r}
+primary = statement %>%
+  filter(Turnover < 0, str_detect(Details, "investment in")) %>% 
+  mutate(Date = as.Date(Date)) %>%
+  complete(Date = seq.Date(date_interval$min, date_interval$max, by="day"), Turnover=0) %>%
+  group_by(Date) %>% 
+  summarise(Turnover=-sum(Turnover)) %>%
+  mutate(Category = "primary")
+
+secondary = statement %>%
+  filter(Turnover < 0, str_detect(Details, "secondary mark")) %>% 
+  mutate(Date = as.Date(Date)) %>%
+  complete(Date = seq.Date(date_interval$min, date_interval$max, by="day"), Turnover=0) %>%
+  group_by(Date) %>% 
+  summarise(Turnover=-sum(Turnover)) %>%
+  mutate(Category = "secondary")
+
+data = rbind(primary, secondary)
+datatable(data)
+
+ggplot(data) +
+  geom_bar(aes(x = Date, y = Turnover, fill = Category), stat = "identity") +
+  xlab(NULL) +
+  ylab("Transactions (EUR)")
+```
+
+I picchi corrispondono alle giornate in cui è stato depositato capitale aggiuntivo. 
+
+Col crescere del capitale totale e il trascorrere del tempo, la quantità giornaliera di fondi rientrati (e quindi reinvestiti) è costantemente aumentata. 
+
+Per confrontare meglio la differenza tra mercato primario e secondario esaminiamo le transazioni in maniera cumulativa. 
+
+```{r}
+primary = statement %>%
+  filter(Turnover < 0, str_detect(Details, "investment in")) %>% 
+  mutate(Date = as.Date(Date)) %>%
+  mutate(Category = "primary")
+
+secondary = statement %>%
+  filter(Turnover < 0, str_detect(Details, "secondary mark")) %>% 
+  mutate(Date = as.Date(Date)) %>%
+  mutate(Category = "secondary")
+
+data = rbind(primary, secondary)
+
+ggplot(data) +
+  geom_line(aes(x = Date, y = cumsum(-Turnover), color = Category), stat = "identity") +
+  ylab("Cumulative transactions (EUR)") + 
+  xlab(NULL) 
+
+```
+
+La quantità di transazioni (acquisti) nel mercato secondario è di gran lunga superiore al mercato primario. Inoltre il valore delle transazioni sul mercato secondario aumenta col passare del tempo. 
+
+Quali loan originator hanno portato i maggiori profitti? 
+
+```{r, fig.width=8, fig.height=8}
+data = all %>% 
+  mutate(`Profit` = `Outstanding Principal` + `Received Payments` + `Pending Payments` - `My Investments`) %>%
+  filter(Profit > 0) %>%
+  group_by(`Lending Company`) %>% 
+  summarise(`Invested` = sum(`My Investments`), 
+           `Average NAR` = mean(`Interest Rate`),
+           Profit = sum(Profit))
+
+ggplot(data, aes(x = `Invested`, y = `Average NAR`)) +
+  geom_point(aes(size = `Profit`, col = rainbow(nrow(data))), alpha = 0.5, show.legend = FALSE) +
+  scale_size(range = c(.1, 30)) +
+  geom_text_repel(aes(label=`Lending Company`)) +
+  xlab("Invested amount (EUR)")
+```
+
+
+Si nota come il profitto aumenta al crescere del capitale investito e del tassso di interesse, come è ragionevole supporre. 
