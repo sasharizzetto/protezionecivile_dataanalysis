@@ -9,13 +9,17 @@ knitr::opts_chunk$set(echo = TRUE)
 library(RPostgreSQL)
 library(DT)
 library(tidyverse)
+library(gganimate)
+library(gifski)
+library(png)
+library(fmsb)
 
 con <- DBI::dbConnect(RPostgreSQL::PostgreSQL(), 
-                      host = "0.tcp.ngrok.io",
-                      port = "12696",
+                      host = "127.0.0.1",
+                      port = "5432",
                       dbname = "pc", 
                       user = "postgres",
-                      password = "postgres")
+                      password = "admin")
                       #password = rstudioapi::askForPassword("postgres"))
 
 # tb %>% show_query()
@@ -43,7 +47,7 @@ att_per_comune %>%
   ggplot(aes(x=reorder(nome_comune, n), y=n, fill = nome_comune)) + 
   geom_bar(stat = 'identity') + 
   guides(fill=FALSE) + 
-  labs(title="I primi 10 comuni per attività", x = "Numero attività", y = "Comune") +
+  labs(title="I primi 10 comuni per attività", x = "Comune", y = "Numero attività") +
   coord_flip()
 ```
 
@@ -54,6 +58,490 @@ att_per_comune %>%
   ggplot(aes(x=reorder(nome_comune, -n), y=n, fill = nome_comune)) + 
   geom_bar(stat = 'identity') + 
   guides(fill=FALSE) + 
-  labs(title="Gli ultimi 10 comuni per attività", x = "Numero attività", y = "Comune") +
+  labs(title="Gli ultimi 10 comuni per attività", x = "Comune", y = "Numero attività") +
   coord_flip()
 ```
+
+# 2. ISTOGRAMMA ATTIVITA' PER MESE (per un certo anno)
+```{r}
+#anno_richiesto = format(Sys.Date(), "%Y") #anno corrente del sistema
+anno_richiesto = 2017    #anno passato esplicitamente
+data_min = paste(anno_richiesto, "-01-01", sep="")  #es. 2021-01-01
+data_max = paste(anno_richiesto, "-12-31", sep="")  #es. 2021-12-31
+
+#ottengo attività
+df = tbl(con, "attivita_completata") %>% 
+  filter(timestamp_inizio_effettivo >= as.Date(data_min) & timestamp_fine_effettivo <= as.Date(data_max)) %>% 
+  collect() 
+#estraggo mese
+df$mese = format(df$timestamp_inizio_effettivo, "%m")
+#calcolo durata in ore
+df$ore_totali = as.numeric(difftime(df$timestamp_fine_effettivo, df$timestamp_inizio_effettivo), units="hours")
+```
+
+# 2.a ISTOGRAMMA PER ORE ATTIVITA
+```{r}
+#raggruppo per ore totali
+dfHours = df %>% 
+  group_by(mese) %>% 
+  summarise(durata = sum(ore_totali))
+
+# Istogramma ore attivita:
+ggplot(dfHours, aes(x=mese, y=durata, fill=mese)) + 
+  geom_bar(stat='identity') +
+  labs(title= paste("Ore attività per mese del", anno_richiesto), x = "Mese", y = "Durata (ore)")
+  
+```
+
+# 2.b ISTOGRAMMA PER NUMERO ATTIVITA
+```{r}
+#raggruppo per numero attivita totali
+dfNum = df %>% 
+  group_by(mese) %>%
+  summarise(numAttivita = n())
+
+# Istogramma ore attivita:
+ggplot(dfNum, aes(x=mese, y=numAttivita, fill=mese)) + 
+  geom_bar(stat='identity') +
+  labs(title= paste("Numero attività per mese del", anno_richiesto), x = "Mese", y = "Numero attività")
+
+```
+
+# 2.c CONFRONTO ORE-NUM ATTIVITA PER MESE
+```{r}
+raggruppamento <- rep(c("Ore" , "Numero") , 6)
+data <- data.frame(dfNum, dfHours, raggruppamento)
+
+# Grouped
+ggplot(df, aes(fill=1:nrow(df), y=ore_totali, x=mese)) + 
+    geom_bar(position="stack", stat="identity") +
+    guides(fill=FALSE) + 
+    labs(title="Confronto ore-numero attività", x = "Mese", y = "Ore Totali")
+```
+
+
+# TODO: RIVEDERE 2.a ISTOGRAMMA ATTIVITA PER MESE ANIMAZIONE ULTIMI 2 ANNI
+```{r}
+anno_partenza = 2017    #anno passato esplicitamente
+anni_da_scorrere = 3
+df_map = list()
+data = data.frame()
+
+for(anno_richiesto in anno_partenza:(anno_partenza + anni_da_scorrere)) {
+  data_min = paste(anno_richiesto, "-01-01", sep="")  #es. 2021-01-01
+  data_max = paste(anno_richiesto, "-12-31", sep="")  #es. 2021-12-31
+
+  #ottengo attività
+  df = tbl(con, "attivita_completata") %>% 
+    filter(timestamp_inizio_effettivo >= as.Date(data_min) & timestamp_fine_effettivo <= as.Date(data_max)) %>% 
+    collect() 
+  #estraggo mese
+  df$mese = format(df$timestamp_inizio_effettivo, "%m")
+  #calcolo durata in ore
+  df$ore_totali = as.numeric(difftime(df$timestamp_fine_effettivo, df$timestamp_inizio_effettivo), units="hours")
+  
+  #df_map[[anno_richiesto]] = df
+  
+  # Make 2 basic states and concatenate them:
+  a <- data.frame(group=df$mese, values=df$ore_totali, frame=rep(anno_richiesto,nrow(df)))
+  data <- rbind(data,a)
+}
+ 
+# Basic barplot:
+ggplot(data, aes(x=group, y=values, fill=group)) + 
+  geom_bar(stat='identity')
+ 
+# Make a ggplot, but add frame=year: one image per year
+ggplot(data, aes(x=group, y=values, fill=group)) + 
+  geom_bar(stat='identity') +
+  theme_bw() +
+  # gganimate specific bits:
+  transition_states(
+    frame,
+    transition_length = anni_da_scorrere,  #num stati su cui fare loop
+    state_length = 2        #durata pausa su loop
+  ) +
+  ease_aes('sine-in-out')
+
+# Save at gif:
+anim_save("288-animated-barplot-transition.gif")
+```
+# 3 ISTOGRAMMA ATTIVITA' PER PERSONA (solo membri PC)
+```{r}
+
+att_per_persona = tbl(con, "partecipazione") %>% 
+  group_by(codice_attivita, id_partecipante) %>% #se ha partecipato due volte alla stessa, conta una
+  group_by(id_partecipante) %>% 
+  summarise(numPartecipazioni = n()) %>% 
+  right_join(tbl(con, "persona")) %>% 
+  collect() %>% 
+  unite(nome_cognome, nome, cognome, sep = " ", remove = TRUE, na.rm = FALSE) %>%  #unisco nome cognome
+  arrange(-numPartecipazioni)
+
+datatable(att_per_persona)
+```
+
+## 3.a I primi 10 volontari per numero attività
+```{r}
+att_per_persona %>% 
+  head(n=10) %>% 
+  ggplot(aes(x=reorder(nome_cognome, numPartecipazioni), y=numPartecipazioni, fill = nome_cognome)) + 
+  geom_bar(stat = 'identity') + 
+  guides(fill=FALSE) + 
+  labs(title="I primi 10 volontari per numero attività", x = "Volontario", y = "Numero attività") +
+  coord_flip()
+```
+
+## 3.b Gli ultimi 10 volontari per numero attività
+```{r}
+att_per_persona %>% 
+  tail(n=10) %>% 
+  ggplot(aes(x=reorder(nome_cognome, -numPartecipazioni), y=numPartecipazioni, fill = nome_cognome)) + 
+  geom_bar(stat = 'identity') + 
+  guides(fill=FALSE) + 
+  labs(title="Gli ultimi 10 volontari per numero attività", x = "Volontario", y = "Numero attività") +
+  coord_flip()
+```
+## 3.c ore TOTALI attività
+```{r}
+partecipazioni = tbl(con, "partecipazione") %>% 
+  right_join(tbl(con, "persona")) %>% 
+  collect() 
+
+#ore totali
+ore_per_persona = partecipazioni %>%
+  mutate(ore_uomo = as.numeric(difftime(timestamp_uscita, timestamp_ingresso), units="hours")) %>% #calcolo le ore
+  group_by(id_partecipante, nome_cognome=paste(nome,cognome,sep=" ")) %>% 
+  summarise(ore_uomo_totali = sum(ore_uomo)) %>% 
+  arrange(-ore_uomo_totali)
+
+datatable(ore_per_persona)
+```
+
+## 3.c ISTOGRAMMA dei primi 10 volontari per ore TOTALI attività
+```{r}
+ore_per_persona %>% 
+  head(n=10) %>% 
+  ggplot(aes(x=reorder(nome_cognome, ore_uomo_totali), y=ore_uomo_totali, fill = nome_cognome)) + 
+  geom_bar(stat = 'identity') + 
+  guides(fill=FALSE) + 
+  labs(title="I primi 10 volontari per ore TOTALI attività", x = "Volontario", y = "Ore attività") +
+  coord_flip()
+```
+## 3.c ISTOGRAMMA degli ultimi 10 volontari per ore TOTALI attività
+```{r}
+ore_per_persona %>% 
+  tail(n=10) %>% 
+  ggplot(aes(x=reorder(nome_cognome, -ore_uomo_totali), y=ore_uomo_totali, fill = nome_cognome)) + 
+  geom_bar(stat = 'identity') + 
+  guides(fill=FALSE) + 
+  labs(title="Gli ultimi 10 volontari per ore TOTALI attività", x = "Volontario", y = "Ore attività") +
+  coord_flip()
+```
+## 3.d ore ULTIMO ANNO attività
+```{r}
+#anno_richiesto = format(Sys.Date(), "%Y") #anno corrente del sistema
+anno_richiesto = 2017    #anno passato esplicitamente
+data_min = paste(anno_richiesto, "-01-01", sep="")  #es. 2021-01-01
+data_max = paste(anno_richiesto, "-12-31", sep="")  #es. 2021-12-31
+
+ore_ultimo_anno = partecipazioni %>% 
+  filter(timestamp_ingresso >= as.Date(data_min) & timestamp_ingresso <= as.Date(data_max)) %>% 
+  collect() %>% 
+  mutate(ore_uomo = as.numeric(difftime(timestamp_uscita, timestamp_ingresso), units="hours")) %>% #calcolo le ore
+  group_by(id_partecipante, nome_cognome=paste(nome,cognome,sep=" ")) %>% 
+  summarise(ore_uomo_totali = sum(ore_uomo)) %>% 
+  arrange(-ore_uomo_totali)
+
+datatable(ore_ultimo_anno)
+```
+
+## 3.d ISTOGRAMMA dei primi 10 volontari per ore ULTIMO ANNO attività
+```{r}
+ore_ultimo_anno %>% 
+  head(n=10) %>% 
+  ggplot(aes(x=reorder(nome_cognome, ore_uomo_totali), y=ore_uomo_totali, fill = nome_cognome)) + 
+  geom_bar(stat = 'identity') + 
+  guides(fill=FALSE) + 
+  labs(title="I primi 10 volontari per ore ULTIMO ANNO attività", x = "Volontario", y = "Ore attività") +
+  coord_flip()
+```
+## 3.d ISTOGRAMMA degli ultimi 10 volontari per ore ULTIMO ANNO attività
+```{r}
+ore_ultimo_anno %>% 
+  tail(n=10) %>% 
+  ggplot(aes(x=reorder(nome_cognome, -ore_uomo_totali), y=ore_uomo_totali, fill = nome_cognome)) + 
+  geom_bar(stat = 'identity') + 
+  guides(fill=FALSE) + 
+  labs(title="Gli ultimi 10 volontari per ore ULTIMO ANNO attività", x = "Volontario", y = "Ore attività") +
+  coord_flip()
+```
+## TODO: nel caso finire... 4.d ISTOGRAMMA composizione tipi attività svolte dai primi 10 volontari per ore
+```{r}
+#ottengo anche dati sui tipi, tramite join con attivita
+df = tbl(con, "partecipazione") %>% 
+  right_join(tbl(con, "persona")) %>% 
+  left_join(tbl(con, "attivita")) %>% 
+  collect() 
+
+anno_richiesto = 2017    #anno passato esplicitamente
+data_min = paste(anno_richiesto, "-01-01", sep="")  #es. 2021-01-01
+data_max = paste(anno_richiesto, "-12-31", sep="")  #es. 2021-12-31
+
+ore = df %>% 
+  filter(timestamp_ingresso >= as.Date(data_min) & timestamp_ingresso <= as.Date(data_max)) %>% 
+  mutate(ore_uomo = as.numeric(difftime(timestamp_uscita, timestamp_ingresso), units="hours")) %>% #calcolo le ore
+  group_by(id_partecipante, nome_tipo_attivita, nome_cognome=paste(nome,cognome,sep=" ")) %>% 
+  summarise(ore_per_attivita = sum(ore_uomo))
+
+# create a dataset
+primi_10 <- ore %>% 
+  group_by(id_partecipante) %>% 
+  summarise(ore_totali = sum(ore_per_attivita)) %>% 
+  arrange(-ore_totali) %>% 
+  head(10)
+  
+
+
+value <- abs(rnorm(12 , 0 , 15))
+data <- data.frame(specie,condition,value)
+ 
+# Stacked
+ggplot(ore, aes(fill=nome_tipo_attivita, y=value, x=specie)) + 
+    geom_bar(position="stack", stat="identity")
+```
+
+# 4.a Grafico a torta tipi attività (di sempre)
+```{r}
+data = tbl(con, "attivita") %>% 
+  count(nome_tipo_attivita) %>% 
+  collect()
+
+# preparo dati per intabellamento
+data <- data %>% 
+  mutate(per=n/sum(n)) %>% 
+  arrange(desc(nome_tipo_attivita))
+
+# uso percentuali come label
+data$label <- scales::percent(data$per)
+
+#Plot
+ggplot(data=data)+
+  geom_bar(aes(x="", y=per, fill=nome_tipo_attivita), stat="identity", width = 1)+
+  coord_polar("y", start=0)+
+  theme_void()+
+  geom_text(aes(x=1, y = cumsum(per) - per/2, label=label))+
+  ggtitle("Distribuzione storica tipi attività") +
+  guides(fill=guide_legend(title="Tipi Attività"))
+```
+# 4.a Grafico a torta tipi attività (anno specifico)
+```{r}
+anno_richiesto = 2017    #anno passato esplicitamente
+data_min = paste(anno_richiesto, "-01-01", sep="")  #es. 2021-01-01
+data_max = paste(anno_richiesto, "-12-31", sep="")  #es. 2021-12-31
+
+data = tbl(con, "attivita") %>% 
+  filter(timestamp_inizio_previsto >= as.Date(data_min) & timestamp_inizio_previsto <= as.Date(data_max)) %>% 
+  count(nome_tipo_attivita) %>% 
+  collect()
+
+# preparo dati per intabellamento
+data <- data %>% 
+  mutate(per=n/sum(n)) %>% 
+  arrange(desc(nome_tipo_attivita))
+
+# uso percentuali come label
+data$label <- scales::percent(data$per)
+
+#Plot
+ggplot(data=data)+
+  geom_bar(aes(x="", y=per, fill=nome_tipo_attivita), stat="identity", width = 1)+
+  coord_polar("y", start=0)+
+  theme_void()+
+  geom_text(aes(x=1, y = cumsum(per) - per/2, label=label))+
+  ggtitle(paste("Distribuzione tipi attività nel", anno_richiesto)) +
+  guides(fill=guide_legend(title="Tipi Attività"))
+```
+
+# 5a Istogramma disponibilita per mese
+```{r}
+anno_richiesto = 2017    #anno passato esplicitamente
+data_min = paste(anno_richiesto, "-01-01", sep="")  #es. 2021-01-01
+data_max = paste(anno_richiesto, "-12-31", sep="")  #es. 2021-12-31
+
+disponibilita = tbl(con, "attivita") %>% 
+  filter(timestamp_inizio_previsto >= as.Date(data_min) & timestamp_inizio_previsto <= as.Date(data_max)) %>% 
+  inner_join(tbl(con, "disponibilita")) %>% 
+  collect()
+
+#estraggo mese
+disponibilita$mese = format(disponibilita$timestamp_inizio_previsto, "%m")
+
+#raggruppo
+disp_mese = disponibilita %>% 
+  group_by(mese, disponibilita_positiva) %>% 
+  summarise(numero = n()) %>% 
+  mutate(disponibilita_positiva = ifelse(as.character(disponibilita_positiva) == "FALSE", "Negativa", "Positiva"))
+
+# Grouped
+ggplot(disp_mese, aes(fill=disponibilita_positiva, y=numero, x=mese)) + 
+    geom_bar(position="dodge", stat="identity") +
+    labs(title = "Distribuzione temporale disponibilità", x = "Mese", y = "Numero disponibilità") +
+    guides(fill=guide_legend(title="Tipo disponibilità"))
+
+```
+
+# 5b Istogramma disponibilita per tipo attivita
+```{r}
+  
+#raggruppo
+disp_tipo = disponibilita %>% 
+  group_by(nome_tipo_attivita, disponibilita_positiva) %>% 
+  summarise(numero = n()) %>% 
+  mutate(disponibilita_positiva = ifelse(as.character(disponibilita_positiva) == "FALSE", "Negativa", "Positiva"))
+
+# Grouped
+ggplot(disp_tipo, aes(fill=disponibilita_positiva, y=numero, x=nome_tipo_attivita)) + 
+    geom_bar(position="dodge", stat="identity") +
+    coord_flip() +
+    labs(title = "Distribuzione disponibilità per tipo attivita", x = "Tipo Attivita", y = "Numero disponibilità") +
+    guides(fill=guide_legend(title="Tipo disponibilità")) 
+
+```
+# 6 Radar distribuzione abilitazioni
+```{r}
+data = tbl(con, "ha_abilitazione") %>% 
+  count(nome_abilitazione) %>% 
+  collect() 
+
+translated = data %>% 
+  spread(nome_abilitazione, n)
+
+ 
+# To use the fmsb package, I have to add 2 lines to the dataframe: the max and min of each topic to show on the plot!
+translated <- rbind(rep(max(data$n),nrow(data)) , rep(min(data$n),nrow(data)) , translated)
+ 
+# Check your data, it has to look like this!
+head(translated)
+
+#radar chart 
+radarchart( translated  , axistype=1 , 
+ 
+    #custom polygon
+    pcol=rgb(0.2,0.5,0.5,0.9) , pfcol=rgb(0.2,0.5,0.5,0.5) , plwd=4 , 
+ 
+    #custom the grid
+    cglcol="grey", cglty=1, axislabcol="grey", caxislabels=seq(min(data$n),max(data$n),3), cglwd=0.8,
+ 
+    #custom labels
+    vlcex=0.7
+    )
+```
+
+
+
+# 6 istogramma con numero persone per abilitazione
+```{r}
+abilitazioni = tbl(con, "ha_abilitazione") %>% 
+  count(nome_abilitazione) %>% 
+  collect()
+
+ggplot(abilitazioni, aes(fill=nome_abilitazione, y=n, x=reorder(nome_abilitazione, n))) + 
+    geom_bar(stat="identity") +
+    labs(title = "Numero persone per abilitazione", x = "Abilitazione", y = "Numero persone") +
+    guides(fill=FALSE) + 
+    coord_flip()
+```
+# 6b istogramma con numero abilitazioni per persona
+```{r}
+abilitazioni_persona = tbl(con, "ha_abilitazione") %>% 
+  count(numero_tessera) %>% 
+  left_join(tbl(con, "persona")) %>% 
+  arrange(-n) %>% 
+  head(20) %>% 
+  collect() %>% 
+  unite(nome_cognome, nome, cognome, sep=" ")
+
+ggplot(abilitazioni_persona, aes(fill=nome_cognome, y=n, x=reorder(nome_cognome, n))) + 
+    geom_bar(stat="identity") +
+    labs(title = "Numero abilitazioni per persona", x = "Persona", y = "Numero abilitazioni") +
+    guides(fill=FALSE) + 
+    coord_flip()
+```
+
+# 7 grafico a torta con quantità dei consumabili
+```{r}
+
+consumabili = tbl(con, "attrezzatura_consumabile") %>% 
+  collect()
+
+# preparo dati per intabellamento
+data <- consumabili %>% 
+  mutate(per=quantita_ultima_misurazione/sum(quantita_ultima_misurazione)) %>% 
+  arrange(desc(nome_attrezzatura))
+
+# uso percentuali come label
+data$label <- scales::percent(data$per)
+
+#Plot
+ggplot(data=data)+
+  geom_bar(aes(x="", y=per, fill=nome_attrezzatura), stat="identity", width = 1)+
+  coord_polar("y", start=0)+
+  theme_void()+
+  geom_text(aes(x=1, y = cumsum(per) - per/2, label=label))+
+  ggtitle("Quantità dei consumabili a magazzino") +
+  guides(fill=guide_legend(title="Tipo attrezzatura"))
+```
+
+# 8 istogramma del numero dei non consumabili
+```{r}
+
+non_consumabili = tbl(con, "attrezzatura_non_consumabile") %>% 
+  filter(is.na(data_fine_esistenza)) %>% #tengo solo attrezzature attive
+  count(nome_attrezzatura) %>% 
+  collect() %>% 
+  arrange(-n)
+
+
+ggplot(non_consumabili, aes(x=reorder(nome_attrezzatura, n), y=n, fill=nome_attrezzatura)) +
+    geom_bar(stat="identity") +
+    labs(title = "Numero non consumabili a magazzino", x = "Numero", y = "Attrezzatura") +
+    guides(fill=FALSE) + 
+    coord_flip()
+
+```
+
+# 8 Datatable numero dei non consumabili
+```{r}
+datatable(non_consumabili)
+```
+
+# HA POCO SENSO... QUASI MAI ESTERNI Tipi di persone per attività (ultime n attività)
+```{r}
+nAttivita = 15
+
+attivita = tbl(con, "attivita_completata") %>% 
+  arrange(desc(as.Date(timestamp_inizio_effettivo))) %>% 
+  head(nAttivita) %>% 
+  left_join(tbl(con, "partecipazione"))
+
+persone_esterne = attivita %>% 
+  inner_join(tbl(con, "persona_esterna")) %>% 
+  collect()
+
+persone_interne = attivita %>% 
+  inner_join(tbl(con, "persona")) %>% 
+  collect()
+
+# Grouped
+ggplot(disp_mese, aes(fill=disponibilita_positiva, y=numero, x=mese)) + 
+    geom_bar(position="dodge", stat="identity") +
+    labs(title = "Distribuzione temporale disponibilità", x = "Mese", y = "Numero disponibilità") +
+    guides(fill=guide_legend(title="Tipo disponibilità"))
+```
+
+# 9 lineplot con il numero di attività nel tempo per persona
+```{r}
+
+```
+
