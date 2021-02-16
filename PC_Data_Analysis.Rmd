@@ -8,7 +8,6 @@ knitr::opts_chunk$set(echo = TRUE)
 library(RPostgreSQL)
 library(DT)
 library(tidyverse)
-library(gganimate)
 library(gifski)
 library(png)
 library(fmsb)
@@ -32,7 +31,7 @@ A seguito di interviste al committente si è sviluppata la base di dati specific
 
 ## Obiettivi del progetto
 Questo progetto di Scienza dei Dati si prefigge l'obiettivo di creare un sistema di analisi dei dati utilizzabile sul campo, sia dai volontari che dai responsabili di Protezione Civile. Questo sistema andrà a supportare alcuni processi decisionali, e a colmare grandi lacune informative, gestite al momento tramite fogli excel. <br>
-Proprio visto l'obiettivo in questione, le rappresentazioni grafiche scelte cercano di avvicinarsi il più possibile all'utente target, cioè un utente che non necessariamente ha particolari competenze statistiche e di analisi dei dati. Queste rappresentazioni dovranno essere quindi intuitive, per essere comprese rapidamente al fine di supportare al meglio le decisioni sul campo. Si farà largo impiego perciò di barplot in vari formati, lineplot, grafici a torta e datatable.
+Proprio visto l'obiettivo in questione, le rappresentazioni grafiche scelte cercano di avvicinarsi il più possibile all'utente target, cioè un utente che non necessariamente ha particolari competenze statistiche e di analisi dei dati. Queste rappresentazioni dovranno essere quindi intuitive, per essere comprese rapidamente al fine di supportare al meglio le decisioni sul campo. Si farà largo impiego perciò di barplot in vari formati, grafici a torta e datatable.
 
 ## Dati utilizzati
 La base di dati in questione è stata popolata con l'ausilio di generatori di dati, per ragioni di privacy infatti non ci è consentito utilizzare dati reali della Protezione Civile.<br>

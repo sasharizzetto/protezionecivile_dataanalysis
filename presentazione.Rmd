@@ -1,0 +1,81 @@
+---
+title: "Protezione Civile - Data Analysis"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Progetto App Protezione Civile
+
+La **Protezione Civile** del comune di *San Vito al Tagliamento* attualmente utilizza moduli cartacei per: 
+
+- la gestione delle proprie attività.
+- il tracciamento della partecipazione delle squadre.
+- la gestione dell’inventario di strumenti e attrezzi presenti in magazzino. 
+
+Al fine di rendere più pratici questi processi di gestione, l’ente sta considerando il passaggio ad un sistema informativo in grado di fornire i servizi sopracitati.
+
+## Idea
+
+Essendo membro della Protezione Civile ho pensato di cogliere la palla al balzo per realizzarla. 
+
+Unendo l'utile al dilettevole è sorta l'idea di usare questo come caso di studio per i progetti formativi dei corsi di *Scienza dei Dati* e di *Basi di Dati*.
+
+## Progettazione Database
+
+Assieme ad altri due studenti, *Alessio Corrado* e *Davide della Giustina*, abbiamo realizzato il DB e l'abbiamo documentato nella relazione di Basi di Dati.
+
+A seguito di diverse interviste con il committente abbiamo sviluppato il DB per rispecchiare al meglio la realtà in questione.
+
+## Generazione dei dati
+
+La base di dati in questione è stata popolata con l'ausilio di generatori di dati, **per ragioni di privacy** infatti non ci è consentito utilizzare dati reali della Protezione Civile.
+
+I dati sono comunque stati generati in *maniera significativa*, in quanto come membro della Protezione Civile conosco le dinamiche specifiche. 
+
+Eventuali dettagli sono stati chiariti tramite richieste al committente, di modo da rispecchiare il più possibile il caso di studio specifico.
+
+## Analisi dei dati
+
+Ho poi creato *singolarmente* questo sistema di analisi dei dati come progetto per questo corso.
+
+Questo progetto si prefigge l'obiettivo di creare un sistema di analisi dei dati **utilizzabile sul campo**, sia dai volontari che dai responsabili di Protezione Civile. 
+
+Il sistema andrà a **supportare alcuni processi decisionali**, e a **colmare grandi lacune informative**, gestite al momento tramite fogli excel o addirittura fogli cartacei. 
+
+## Considerazioni pratiche
+
+Proprio visto l'obiettivo in questione, le rappresentazioni grafiche scelte cercano di **avvicinarsi il più possibile all'utente target**, cioè un utente che non necessariamente ha particolari competenze statistiche e di analisi dei dati. 
+
+Queste rappresentazioni dovranno essere quindi *intuitive, per essere comprese rapidamente* al fine di supportare al meglio le decisioni sul campo. 
+
+Si farà largo impiego perciò di *barplot* in vari formati, *grafici a torta* e *datatable*.
+
+## Considerazioni tecniche
+
+Per la realizzazione del sistema sono state usate le seguenti librerie:
+
+- Import: *tidyr*
+- Elaborazione: *dplyr*
+- Visualizzazione: *ggplot*, *gridExtra*
+- Animazione: *DT* (DataTable)
+- Database: *RPostgreSQL*, *dbplyr*
+
+## Fasi successive
+
+In un'ottica più generale il progetto prevede di comporsi in *tre parti*: 
+
+- **Base di dati** (realizzata e documentata). 
+- **Sistema di analisi di dati** (descritto in questa relazione).
+- **Applicazione utente**. 
+
+Quest'ultima componente sarà oggetto di sviluppo successivo, integrandosi con le componenti precedenti.
+
+L'app sarà poi fornita agli utenti di Protezione Civile del gruppo di San Vito al Tagliamento, che sarà il primo caso di studio specifico.
+
+
+
+
+
