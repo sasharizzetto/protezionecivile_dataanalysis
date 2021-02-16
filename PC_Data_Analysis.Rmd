@@ -29,7 +29,28 @@ con <- DBI::dbConnect(RPostgreSQL::PostgreSQL(),
 
 ```
 
-# 1. ATTIVITA PER COMUNE
+# Introduzione
+La Protezione Civile del comune di San Vito al Tagliamento attualmente utilizza moduli cartacei per la gestione delle proprie attività,il tracciamento della partecipazione delle squadre e dell’inventario di strumenti e attrezzi presenti in magazzino. Al fine di rendere più pratici questi processi di gestione, l’ente sta considerando il passaggio ad un sistema informativo in grado di fornire i servizi sopracitati.
+
+# Fasi precedenti
+A seguito di interviste al committente si è sviluppata la base di dati specifica, che è stata illustrata nella relazione del progetto del corso di Basi Di Dati, ad opera di Sasha Rizzetto, Davide Della Giustina e Alessio Corrado. 
+
+# Obiettivi del progetto
+Questo progetto di Scienza dei Dati si prefigge l'obiettivo di creare un sistema di analisi dei dati utilizzabile sul campo, sia dai volontari che dai responsabili di Protezione Civile. Questo sistema andrà a supportare alcuni processi decisionali, e a colmare grandi lacune informative, gestite al momento tramite fogli excel.
+Proprio visto l'obiettivo in questione, le rappresentazioni grafiche scelte cercano di avvicinarsi il più possibile all'utente target, cioè un utente che non necessariamente ha particolari competenze statistiche e di analisi dei dati. Queste rappresentazioni dovranno essere quindi intuitive, per essere comprese rapidamente al fine di supportare al meglio le decisioni sul campo. Si farà largo impiego perciò di barplot in vari formati, lineplot, grafici a torta e datatable.
+
+# Dati utilizzati
+La base di dati in questione è stata popolata con l'ausilio di generatori di dati, per ragioni di privacy infatti non ci è consentito utilizzare dati reali della Protezione Civile.
+I dati sono comunque stati generati in maniera significativa, in quanto come membro della Protezione Civile conosco le dinamiche specifiche. Eventuali specifiche sono state chiarite tramite richieste al committente, di modo da rispecchiare il più possibile il caso di studio specifico.
+Il presente progetto pertanto userà come sorgente dati il database inizialmente citato.
+
+# Fasi successive
+In un'ottica più generale il progetto prevede di comporsi in tre parti: base di dati, sistema di analisi di dati (descritto in questa relazione), e applicazione utente. Quest'ultima componente sarà oggetto di sviluppo successivo, integrandosi con le componenti precedenti, per dare così accesso al sistema agli utenti di Protezione Civile del gruppo di San Vito al Tagliamento, che sarà il primo caso di studio specifico.
+
+
+# 1. Attività per comune
+Il seguente datatable mostra i vari comuni della regione, indicizzati per numero di attività che il gruppo in questione ha svolto in quel luogo nell'intero suo storico.
+Uno sviluppo successivo di questa visualizzazione sarà una heatmap della regione FVG che evidenzierà con colori più o meno accesi i comuni nei quali si sono svolti più interventi.
 ```{r}
 
 att_per_comune = tbl(con, "attivita_completata") %>% 
@@ -41,6 +62,7 @@ datatable(att_per_comune)
 ```
 
 ## I primi 10 comuni per attività
+Si mostra ora mediante un barplot la classifica dei primi 10 comuni in cui si sono svolte più attività.
 ```{r}
 att_per_comune %>% 
   top_n(10) %>% 
@@ -52,6 +74,7 @@ att_per_comune %>%
 ```
 
 ## Gli ultimi 10 comuni per attività
+La medesima rappresentazione viene effettuata per gli ultimi 10 comuni, quelli in cui si sono svolte meno attività.
 ```{r}
 att_per_comune %>% 
   top_n(-10) %>% 
@@ -62,7 +85,8 @@ att_per_comune %>%
   coord_flip()
 ```
 
-# 2. ISTOGRAMMA ATTIVITA' PER MESE (per un certo anno)
+# 2. DISTRIBUZIONE ATTIVITA' (per un certo anno)
+Il codice seguente ottiene i dati specifici delle attività svolte in un dato anno.
 ```{r}
 #anno_richiesto = format(Sys.Date(), "%Y") #anno corrente del sistema
 anno_richiesto = 2017    #anno passato esplicitamente
@@ -79,7 +103,8 @@ df$mese = format(df$timestamp_inizio_effettivo, "%m")
 df$ore_totali = as.numeric(difftime(df$timestamp_fine_effettivo, df$timestamp_inizio_effettivo), units="hours")
 ```
 
-# 2.a ISTOGRAMMA PER ORE ATTIVITA
+## 2.a GRAFICO ORE ATTIVITA
+Il grafico seguente mostra, per ogni mese dell'anno richiesto, le ore complessive di attività svolte dal gruppo.
 ```{r}
 #raggruppo per ore totali
 dfHours = df %>% 
@@ -93,7 +118,8 @@ ggplot(dfHours, aes(x=mese, y=durata, fill=mese)) +
   
 ```
 
-# 2.b ISTOGRAMMA PER NUMERO ATTIVITA
+## 2.b GRAFICO PER NUMERO ATTIVITA
+Analogo al grafico precedente, questo si concentra invece sul numero di attività svolte per ogni mese.
 ```{r}
 #raggruppo per numero attivita totali
 dfNum = df %>% 
@@ -107,12 +133,12 @@ ggplot(dfNum, aes(x=mese, y=numAttivita, fill=mese)) +
 
 ```
 
-# 2.c CONFRONTO ORE-NUM ATTIVITA PER MESE
+## 2.c CONFRONTO ORE-NUM ATTIVITA PER MESE
+Il seguente grafico si propone di mostrare come le ore totali in un certo mese siano distribuite rispetto al numero di attività svolte. Ogni barra del grafico (corrispondente al mese), si compone con sfumature di colori diversi, corrispondenti ognuno a un'attività specifica.
 ```{r}
 raggruppamento <- rep(c("Ore" , "Numero") , 6)
 data <- data.frame(dfNum, dfHours, raggruppamento)
 
-# Grouped
 ggplot(df, aes(fill=1:nrow(df), y=ore_totali, x=mese)) + 
     geom_bar(position="stack", stat="identity") +
     guides(fill=FALSE) + 
@@ -120,7 +146,7 @@ ggplot(df, aes(fill=1:nrow(df), y=ore_totali, x=mese)) +
 ```
 
 
-# TODO: RIVEDERE 2.a ISTOGRAMMA ATTIVITA PER MESE ANIMAZIONE ULTIMI 2 ANNI
+## TODO: RIVEDERE 2.a ISTOGRAMMA ATTIVITA PER MESE ANIMAZIONE ULTIMI 2 ANNI
 ```{r}
 anno_partenza = 2017    #anno passato esplicitamente
 anni_da_scorrere = 3
@@ -166,7 +192,10 @@ ggplot(data, aes(x=group, y=values, fill=group)) +
 # Save at gif:
 anim_save("288-animated-barplot-transition.gif")
 ```
-# 3 ISTOGRAMMA ATTIVITA' PER PERSONA (solo membri PC)
+
+# 3. NUMERO ATTIVITA' PER PERSONA (solo membri PC)
+Analizziamo con il seguente datatable, per ogni membro di PC, il numero di attività a cui ha partecipato. Questa statistica è molto usata dai responsabili per individuare i membri più meritevoli e per decidere eventuali promozioni a caposquadra.
+Il periodo temporale in questione è tutto lo storico esistente del gruppo.
 ```{r}
 
 att_per_persona = tbl(con, "partecipazione") %>% 
@@ -182,6 +211,7 @@ datatable(att_per_persona)
 ```
 
 ## 3.a I primi 10 volontari per numero attività
+Ecco quindi la classifica dei primi 10 volontari, coloro che hanno svolto più attività.
 ```{r}
 att_per_persona %>% 
   head(n=10) %>% 
@@ -193,6 +223,8 @@ att_per_persona %>%
 ```
 
 ## 3.b Gli ultimi 10 volontari per numero attività
+E analogamente gli ultimi 10, che hanno svolto meno attività. 
+N.B: non significa che abbiano lavorato di meno, potrebbero aver fatto un numero minore di attività, ma di una durata molto più lunga che potrebbe portare il loro complessivo ore ad essere maggiore di quello di altri che hanno svolto più attività. Nei prossimi punti analizzeremo il problema sotto quest'ottica.
 ```{r}
 att_per_persona %>% 
   tail(n=10) %>% 
@@ -202,7 +234,9 @@ att_per_persona %>%
   labs(title="Gli ultimi 10 volontari per numero attività", x = "Volontario", y = "Numero attività") +
   coord_flip()
 ```
-## 3.c ore TOTALI attività
+
+# 4. Ore attività per persona (solo membri PC)
+Come anticipato andiamo ora invece ad analizzare le ore uomo svolte da ogni volontario. Come per il punto 3 anche qua il periodo temporale è l'intero storico e le informazioni risultanti aiutano nell'analisi dei membri più meritevoli.
 ```{r}
 partecipazioni = tbl(con, "partecipazione") %>% 
   right_join(tbl(con, "persona")) %>% 
