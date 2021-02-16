@@ -1,11 +1,10 @@
 ---
-title: "PC_Data_Analysis"
+title: "Protezione Civile - Data Analysis"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-#TODO: settare UTF8
 library(RPostgreSQL)
 library(DT)
 library(tidyverse)
@@ -13,6 +12,7 @@ library(gganimate)
 library(gifski)
 library(png)
 library(fmsb)
+library(gridExtra)
 
 con <- DBI::dbConnect(RPostgreSQL::PostgreSQL(), 
                       host = "127.0.0.1",
@@ -20,36 +20,32 @@ con <- DBI::dbConnect(RPostgreSQL::PostgreSQL(),
                       dbname = "pc", 
                       user = "postgres",
                       password = "admin")
-                      #password = rstudioapi::askForPassword("postgres"))
-
-# tb %>% show_query()
-
-#tb %>% left_join(tbl(con, "attivita_completata")) %>% show_query()
-
 
 ```
+# <u>Presentazione del progetto</u>
 
-# Introduzione
+## Introduzione
 La Protezione Civile del comune di San Vito al Tagliamento attualmente utilizza moduli cartacei per la gestione delle proprie attività,il tracciamento della partecipazione delle squadre e dell’inventario di strumenti e attrezzi presenti in magazzino. Al fine di rendere più pratici questi processi di gestione, l’ente sta considerando il passaggio ad un sistema informativo in grado di fornire i servizi sopracitati.
 
-# Fasi precedenti
+## Fasi precedenti
 A seguito di interviste al committente si è sviluppata la base di dati specifica, che è stata illustrata nella relazione del progetto del corso di Basi Di Dati, ad opera di Sasha Rizzetto, Davide Della Giustina e Alessio Corrado. 
 
-# Obiettivi del progetto
-Questo progetto di Scienza dei Dati si prefigge l'obiettivo di creare un sistema di analisi dei dati utilizzabile sul campo, sia dai volontari che dai responsabili di Protezione Civile. Questo sistema andrà a supportare alcuni processi decisionali, e a colmare grandi lacune informative, gestite al momento tramite fogli excel.
+## Obiettivi del progetto
+Questo progetto di Scienza dei Dati si prefigge l'obiettivo di creare un sistema di analisi dei dati utilizzabile sul campo, sia dai volontari che dai responsabili di Protezione Civile. Questo sistema andrà a supportare alcuni processi decisionali, e a colmare grandi lacune informative, gestite al momento tramite fogli excel. <br>
 Proprio visto l'obiettivo in questione, le rappresentazioni grafiche scelte cercano di avvicinarsi il più possibile all'utente target, cioè un utente che non necessariamente ha particolari competenze statistiche e di analisi dei dati. Queste rappresentazioni dovranno essere quindi intuitive, per essere comprese rapidamente al fine di supportare al meglio le decisioni sul campo. Si farà largo impiego perciò di barplot in vari formati, lineplot, grafici a torta e datatable.
 
-# Dati utilizzati
-La base di dati in questione è stata popolata con l'ausilio di generatori di dati, per ragioni di privacy infatti non ci è consentito utilizzare dati reali della Protezione Civile.
-I dati sono comunque stati generati in maniera significativa, in quanto come membro della Protezione Civile conosco le dinamiche specifiche. Eventuali specifiche sono state chiarite tramite richieste al committente, di modo da rispecchiare il più possibile il caso di studio specifico.
+## Dati utilizzati
+La base di dati in questione è stata popolata con l'ausilio di generatori di dati, per ragioni di privacy infatti non ci è consentito utilizzare dati reali della Protezione Civile.<br>
+I dati sono comunque stati generati in maniera significativa, in quanto come membro della Protezione Civile conosco le dinamiche specifiche. Eventuali dettagli sono stati chiariti tramite richieste al committente, di modo da rispecchiare il più possibile il caso di studio specifico.<br>
 Il presente progetto pertanto userà come sorgente dati il database inizialmente citato.
 
-# Fasi successive
+## Fasi successive
 In un'ottica più generale il progetto prevede di comporsi in tre parti: base di dati, sistema di analisi di dati (descritto in questa relazione), e applicazione utente. Quest'ultima componente sarà oggetto di sviluppo successivo, integrandosi con le componenti precedenti, per dare così accesso al sistema agli utenti di Protezione Civile del gruppo di San Vito al Tagliamento, che sarà il primo caso di studio specifico.
 
+# <u>Analisi dei dati</u>
 
-# 1. Attività per comune
-Il seguente datatable mostra i vari comuni della regione, indicizzati per numero di attività che il gruppo in questione ha svolto in quel luogo nell'intero suo storico.
+## 1. Attività per comune
+Il seguente datatable mostra i vari comuni della regione, ordinati per numero di attività che il gruppo in questione ha svolto in quel luogo nell'intero suo storico.<br>
 Uno sviluppo successivo di questa visualizzazione sarà una heatmap della regione FVG che evidenzierà con colori più o meno accesi i comuni nei quali si sono svolti più interventi.
 ```{r}
 
@@ -61,31 +57,34 @@ att_per_comune = tbl(con, "attivita_completata") %>%
 datatable(att_per_comune)
 ```
 
-## I primi 10 comuni per attività
-Si mostra ora mediante un barplot la classifica dei primi 10 comuni in cui si sono svolte più attività.
+### 1.1 I primi 10 comuni per attività
+Si mostra ora mediante un barplot la classifica dei primi 10 comuni in cui si sono svolte più attività.<br>
+La linea rossa indica il numero medio di attività.
 ```{r}
 att_per_comune %>% 
-  top_n(10) %>% 
+  head(10) %>% 
   ggplot(aes(x=reorder(nome_comune, n), y=n, fill = nome_comune)) + 
   geom_bar(stat = 'identity') + 
   guides(fill=FALSE) + 
   labs(title="I primi 10 comuni per attività", x = "Comune", y = "Numero attività") +
+  geom_hline(yintercept = mean(att_per_comune$n), color = "red", linetype="dashed") +
   coord_flip()
 ```
 
-## Gli ultimi 10 comuni per attività
+### 1.2 Gli ultimi 10 comuni per attività
 La medesima rappresentazione viene effettuata per gli ultimi 10 comuni, quelli in cui si sono svolte meno attività.
 ```{r}
 att_per_comune %>% 
-  top_n(-10) %>% 
+  tail(10) %>% 
   ggplot(aes(x=reorder(nome_comune, -n), y=n, fill = nome_comune)) + 
   geom_bar(stat = 'identity') + 
   guides(fill=FALSE) + 
   labs(title="Gli ultimi 10 comuni per attività", x = "Comune", y = "Numero attività") +
+  geom_hline(yintercept = mean(att_per_comune$n), color = "red", linetype="dashed") +
   coord_flip()
 ```
 
-# 2. DISTRIBUZIONE ATTIVITA' (per un certo anno)
+## 2. Distribuzione attivita' (per un certo anno)
 Il codice seguente ottiene i dati specifici delle attività svolte in un dato anno.
 ```{r}
 #anno_richiesto = format(Sys.Date(), "%Y") #anno corrente del sistema
@@ -103,7 +102,7 @@ df$mese = format(df$timestamp_inizio_effettivo, "%m")
 df$ore_totali = as.numeric(difftime(df$timestamp_fine_effettivo, df$timestamp_inizio_effettivo), units="hours")
 ```
 
-## 2.a GRAFICO ORE ATTIVITA
+### 2.1 Grafico ore attivita
 Il grafico seguente mostra, per ogni mese dell'anno richiesto, le ore complessive di attività svolte dal gruppo.
 ```{r}
 #raggruppo per ore totali
@@ -114,11 +113,12 @@ dfHours = df %>%
 # Istogramma ore attivita:
 ggplot(dfHours, aes(x=mese, y=durata, fill=mese)) + 
   geom_bar(stat='identity') +
-  labs(title= paste("Ore attività per mese del", anno_richiesto), x = "Mese", y = "Durata (ore)")
+  labs(title= paste("Ore attività per mese del", anno_richiesto), x = "Mese", y = "Durata (ore)") +
+  geom_hline(yintercept = mean(dfHours$durata), color = "red", linetype="dashed")
   
 ```
 
-## 2.b GRAFICO PER NUMERO ATTIVITA
+### 2.2 Grafico per numero attivita
 Analogo al grafico precedente, questo si concentra invece sul numero di attività svolte per ogni mese.
 ```{r}
 #raggruppo per numero attivita totali
@@ -129,12 +129,13 @@ dfNum = df %>%
 # Istogramma ore attivita:
 ggplot(dfNum, aes(x=mese, y=numAttivita, fill=mese)) + 
   geom_bar(stat='identity') +
-  labs(title= paste("Numero attività per mese del", anno_richiesto), x = "Mese", y = "Numero attività")
+  labs(title= paste("Numero attività per mese del", anno_richiesto), x = "Mese", y = "Numero attività") +
+  geom_hline(yintercept = mean(dfNum$numAttivita), color = "red", linetype="dashed")
 
 ```
 
-## 2.c CONFRONTO ORE-NUM ATTIVITA PER MESE
-Il seguente grafico si propone di mostrare come le ore totali in un certo mese siano distribuite rispetto al numero di attività svolte. Ogni barra del grafico (corrispondente al mese), si compone con sfumature di colori diversi, corrispondenti ognuno a un'attività specifica.
+### 2.3 Confronto ore-num attivita per mese
+Il seguente grafico si propone di mostrare come le ore totali in un certo mese siano distribuite rispetto al numero di attività svolte. Ogni barra del grafico (corrispondente al mese), si compone con sfumature di colori diversi, corrispondenti ognuna a un'attività specifica.
 ```{r}
 raggruppamento <- rep(c("Ore" , "Numero") , 6)
 data <- data.frame(dfNum, dfHours, raggruppamento)
@@ -145,56 +146,8 @@ ggplot(df, aes(fill=1:nrow(df), y=ore_totali, x=mese)) +
     labs(title="Confronto ore-numero attività", x = "Mese", y = "Ore Totali")
 ```
 
-
-## TODO: RIVEDERE 2.a ISTOGRAMMA ATTIVITA PER MESE ANIMAZIONE ULTIMI 2 ANNI
-```{r}
-anno_partenza = 2017    #anno passato esplicitamente
-anni_da_scorrere = 3
-df_map = list()
-data = data.frame()
-
-for(anno_richiesto in anno_partenza:(anno_partenza + anni_da_scorrere)) {
-  data_min = paste(anno_richiesto, "-01-01", sep="")  #es. 2021-01-01
-  data_max = paste(anno_richiesto, "-12-31", sep="")  #es. 2021-12-31
-
-  #ottengo attività
-  df = tbl(con, "attivita_completata") %>% 
-    filter(timestamp_inizio_effettivo >= as.Date(data_min) & timestamp_fine_effettivo <= as.Date(data_max)) %>% 
-    collect() 
-  #estraggo mese
-  df$mese = format(df$timestamp_inizio_effettivo, "%m")
-  #calcolo durata in ore
-  df$ore_totali = as.numeric(difftime(df$timestamp_fine_effettivo, df$timestamp_inizio_effettivo), units="hours")
-  
-  #df_map[[anno_richiesto]] = df
-  
-  # Make 2 basic states and concatenate them:
-  a <- data.frame(group=df$mese, values=df$ore_totali, frame=rep(anno_richiesto,nrow(df)))
-  data <- rbind(data,a)
-}
- 
-# Basic barplot:
-ggplot(data, aes(x=group, y=values, fill=group)) + 
-  geom_bar(stat='identity')
- 
-# Make a ggplot, but add frame=year: one image per year
-ggplot(data, aes(x=group, y=values, fill=group)) + 
-  geom_bar(stat='identity') +
-  theme_bw() +
-  # gganimate specific bits:
-  transition_states(
-    frame,
-    transition_length = anni_da_scorrere,  #num stati su cui fare loop
-    state_length = 2        #durata pausa su loop
-  ) +
-  ease_aes('sine-in-out')
-
-# Save at gif:
-anim_save("288-animated-barplot-transition.gif")
-```
-
-# 3. NUMERO ATTIVITA' PER PERSONA (solo membri PC)
-Analizziamo con il seguente datatable, per ogni membro di PC, il numero di attività a cui ha partecipato. Questa statistica è molto usata dai responsabili per individuare i membri più meritevoli e per decidere eventuali promozioni a caposquadra.
+## 3. Numero attività per persona (solo membri PC)
+Analizziamo con il seguente datatable, per ogni membro di PC, il numero di attività a cui ha partecipato. Questa statistica è molto usata dai responsabili per individuare i membri più meritevoli e per decidere eventuali promozioni a caposquadra.<br>
 Il periodo temporale in questione è tutto lo storico esistente del gruppo.
 ```{r}
 
@@ -207,10 +160,11 @@ att_per_persona = tbl(con, "partecipazione") %>%
   unite(nome_cognome, nome, cognome, sep = " ", remove = TRUE, na.rm = FALSE) %>%  #unisco nome cognome
   arrange(-numPartecipazioni)
 
-datatable(att_per_persona)
+datatable(att_per_persona %>% 
+            select("Nome e cognome" = nome_cognome, "Numero partecipazioni" = numPartecipazioni, "Qualifica" = qualifica))
 ```
 
-## 3.a I primi 10 volontari per numero attività
+### 3.1 I primi 10 volontari per numero attività
 Ecco quindi la classifica dei primi 10 volontari, coloro che hanno svolto più attività.
 ```{r}
 att_per_persona %>% 
@@ -219,11 +173,12 @@ att_per_persona %>%
   geom_bar(stat = 'identity') + 
   guides(fill=FALSE) + 
   labs(title="I primi 10 volontari per numero attività", x = "Volontario", y = "Numero attività") +
+  geom_hline(yintercept = mean(att_per_persona$numPartecipazioni), color = "red", linetype="dashed") +
   coord_flip()
 ```
 
-## 3.b Gli ultimi 10 volontari per numero attività
-E analogamente gli ultimi 10, che hanno svolto meno attività. 
+### 3.2 Gli ultimi 10 volontari per numero attività
+E analogamente gli ultimi 10, che hanno svolto meno attività. <br />
 N.B: non significa che abbiano lavorato di meno, potrebbero aver fatto un numero minore di attività, ma di una durata molto più lunga che potrebbe portare il loro complessivo ore ad essere maggiore di quello di altri che hanno svolto più attività. Nei prossimi punti analizzeremo il problema sotto quest'ottica.
 ```{r}
 att_per_persona %>% 
@@ -232,10 +187,11 @@ att_per_persona %>%
   geom_bar(stat = 'identity') + 
   guides(fill=FALSE) + 
   labs(title="Gli ultimi 10 volontari per numero attività", x = "Volontario", y = "Numero attività") +
+  geom_hline(yintercept = mean(att_per_persona$numPartecipazioni), color = "red", linetype="dashed") +
   coord_flip()
 ```
 
-# 4. Ore attività per persona (solo membri PC)
+## 4. Ore attività per persona (solo membri PC)
 Come anticipato andiamo ora invece ad analizzare le ore uomo svolte da ogni volontario. Come per il punto 3 anche qua il periodo temporale è l'intero storico e le informazioni risultanti aiutano nell'analisi dei membri più meritevoli.
 ```{r}
 partecipazioni = tbl(con, "partecipazione") %>% 
@@ -245,24 +201,30 @@ partecipazioni = tbl(con, "partecipazione") %>%
 #ore totali
 ore_per_persona = partecipazioni %>%
   mutate(ore_uomo = as.numeric(difftime(timestamp_uscita, timestamp_ingresso), units="hours")) %>% #calcolo le ore
-  group_by(id_partecipante, nome_cognome=paste(nome,cognome,sep=" ")) %>% 
-  summarise(ore_uomo_totali = sum(ore_uomo)) %>% 
+  group_by(id_partecipante, nome_cognome=paste(nome,cognome,sep=" "), qualifica) %>% 
+  summarise(ore_uomo_totali = floor(sum(ore_uomo))) %>% 
   arrange(-ore_uomo_totali)
 
-datatable(ore_per_persona)
+datatable(ore_per_persona %>% select("Nome e cognome" = nome_cognome, "Ore totali" = ore_uomo_totali, "Qualifica" = qualifica))
 ```
 
-## 3.c ISTOGRAMMA dei primi 10 volontari per ore TOTALI attività
+### 4.1 Classifica dei primi 10 volontari per ore TOTALI attività
+Nella seguente classifica sono mostrati i primi 10 volontari per ore uomo svolte. Come volevasi dimostrare, non è detto che chi ha svolto più attività abbia lavorato più di altri. Infatti è facile accorgersene confrontando la presente classifica con quella del numero di attività.
 ```{r}
-ore_per_persona %>% 
+classifica_storica = ore_per_persona %>% 
   head(n=10) %>% 
   ggplot(aes(x=reorder(nome_cognome, ore_uomo_totali), y=ore_uomo_totali, fill = nome_cognome)) + 
   geom_bar(stat = 'identity') + 
   guides(fill=FALSE) + 
   labs(title="I primi 10 volontari per ore TOTALI attività", x = "Volontario", y = "Ore attività") +
+  geom_hline(yintercept = mean(ore_per_persona$ore_uomo_totali), color = "red", linetype="dashed") +
   coord_flip()
+
+show(classifica_storica)
 ```
-## 3.c ISTOGRAMMA degli ultimi 10 volontari per ore TOTALI attività
+
+### 4.2 Classifica degli ultimi 10 volontari per ore TOTALI attività
+Analogamente si presentano gli ultimi 10.
 ```{r}
 ore_per_persona %>% 
   tail(n=10) %>% 
@@ -270,9 +232,12 @@ ore_per_persona %>%
   geom_bar(stat = 'identity') + 
   guides(fill=FALSE) + 
   labs(title="Gli ultimi 10 volontari per ore TOTALI attività", x = "Volontario", y = "Ore attività") +
+  geom_hline(yintercept = mean(ore_per_persona$ore_uomo_totali), color = "red", linetype="dashed") +
   coord_flip()
 ```
-## 3.d ore ULTIMO ANNO attività
+
+## 5. Analisi delle ore delle attività svolte per un dato anno
+Analizziamo ora le ore uomo svolte da ogni volontario sotto un'ottica differente. L'intervallo temporale considerato è infatti di un certo anno specifico.
 ```{r}
 #anno_richiesto = format(Sys.Date(), "%Y") #anno corrente del sistema
 anno_richiesto = 2017    #anno passato esplicitamente
@@ -283,24 +248,39 @@ ore_ultimo_anno = partecipazioni %>%
   filter(timestamp_ingresso >= as.Date(data_min) & timestamp_ingresso <= as.Date(data_max)) %>% 
   collect() %>% 
   mutate(ore_uomo = as.numeric(difftime(timestamp_uscita, timestamp_ingresso), units="hours")) %>% #calcolo le ore
-  group_by(id_partecipante, nome_cognome=paste(nome,cognome,sep=" ")) %>% 
-  summarise(ore_uomo_totali = sum(ore_uomo)) %>% 
+  group_by(id_partecipante, nome_cognome=paste(nome,cognome,sep=" "), qualifica) %>% 
+  summarise(ore_uomo_totali = floor(sum(ore_uomo))) %>% 
   arrange(-ore_uomo_totali)
 
-datatable(ore_ultimo_anno)
+datatable(ore_ultimo_anno %>% select("Nome e cognome" = nome_cognome, "Ore totali" = ore_uomo_totali, "Qualifica" = qualifica))
 ```
 
-## 3.d ISTOGRAMMA dei primi 10 volontari per ore ULTIMO ANNO attività
+### 5.1 Classifica dei primi 10 volontari per ore ULTIMO ANNO attività
+
 ```{r}
-ore_ultimo_anno %>% 
+classifica_anno = ore_ultimo_anno %>% 
   head(n=10) %>% 
   ggplot(aes(x=reorder(nome_cognome, ore_uomo_totali), y=ore_uomo_totali, fill = nome_cognome)) + 
   geom_bar(stat = 'identity') + 
   guides(fill=FALSE) + 
   labs(title="I primi 10 volontari per ore ULTIMO ANNO attività", x = "Volontario", y = "Ore attività") +
+  geom_hline(yintercept = mean(ore_ultimo_anno$ore_uomo_totali), color = "red", linetype="dashed") +
   coord_flip()
+
+show(classifica_anno)
+
 ```
-## 3.d ISTOGRAMMA degli ultimi 10 volontari per ore ULTIMO ANNO attività
+
+### Confronto con i valori storici
+Affianchiamo ora i due grafici: quello storico con quello dell'anno richiesto.<br>
+Possiamo notare come le classifiche variano, e non poco. Indice della poca costanza di alcuni volontari che nell'insieme hanno svolto molte ore, ma che nell'anno in questione non hanno avuto le stesse prestazioni.<br>
+Vi è invece anche la riconferma di alcuni volontari che restano stabilmente nella top 10 anche nell'anno richiesto.
+```{r fig.height = 5, fig.width = 10}
+grid.arrange(classifica_storica, classifica_anno, ncol=2)
+```
+
+
+### 5.2 Classifica degli ultimi 10 volontari per ore ULTIMO ANNO attività
 ```{r}
 ore_ultimo_anno %>% 
   tail(n=10) %>% 
@@ -308,44 +288,12 @@ ore_ultimo_anno %>%
   geom_bar(stat = 'identity') + 
   guides(fill=FALSE) + 
   labs(title="Gli ultimi 10 volontari per ore ULTIMO ANNO attività", x = "Volontario", y = "Ore attività") +
+  geom_hline(yintercept = mean(ore_ultimo_anno$ore_uomo_totali), color = "red", linetype="dashed") +
   coord_flip()
 ```
-## TODO: nel caso finire... 4.d ISTOGRAMMA composizione tipi attività svolte dai primi 10 volontari per ore
-```{r}
-#ottengo anche dati sui tipi, tramite join con attivita
-df = tbl(con, "partecipazione") %>% 
-  right_join(tbl(con, "persona")) %>% 
-  left_join(tbl(con, "attivita")) %>% 
-  collect() 
 
-anno_richiesto = 2017    #anno passato esplicitamente
-data_min = paste(anno_richiesto, "-01-01", sep="")  #es. 2021-01-01
-data_max = paste(anno_richiesto, "-12-31", sep="")  #es. 2021-12-31
-
-ore = df %>% 
-  filter(timestamp_ingresso >= as.Date(data_min) & timestamp_ingresso <= as.Date(data_max)) %>% 
-  mutate(ore_uomo = as.numeric(difftime(timestamp_uscita, timestamp_ingresso), units="hours")) %>% #calcolo le ore
-  group_by(id_partecipante, nome_tipo_attivita, nome_cognome=paste(nome,cognome,sep=" ")) %>% 
-  summarise(ore_per_attivita = sum(ore_uomo))
-
-# create a dataset
-primi_10 <- ore %>% 
-  group_by(id_partecipante) %>% 
-  summarise(ore_totali = sum(ore_per_attivita)) %>% 
-  arrange(-ore_totali) %>% 
-  head(10)
-  
-
-
-value <- abs(rnorm(12 , 0 , 15))
-data <- data.frame(specie,condition,value)
- 
-# Stacked
-ggplot(ore, aes(fill=nome_tipo_attivita, y=value, x=specie)) + 
-    geom_bar(position="stack", stat="identity")
-```
-
-# 4.a Grafico a torta tipi attività (di sempre)
+## 6. Grafico a torta tipi attività (di sempre)
+Le attività della Protezione Civile sono categorizzate secondo delle tipologie predefinite. Osserviamo nel seguente grafico a torta come le attività si ripartiscono rispetto alla loro tipologia.
 ```{r}
 data = tbl(con, "attivita") %>% 
   count(nome_tipo_attivita) %>% 
@@ -360,17 +308,22 @@ data <- data %>%
 data$label <- scales::percent(data$per)
 
 #Plot
-ggplot(data=data)+
+tipi_storico = ggplot(data=data)+
   geom_bar(aes(x="", y=per, fill=nome_tipo_attivita), stat="identity", width = 1)+
   coord_polar("y", start=0)+
   theme_void()+
   geom_text(aes(x=1, y = cumsum(per) - per/2, label=label))+
   ggtitle("Distribuzione storica tipi attività") +
   guides(fill=guide_legend(title="Tipi Attività"))
+
+show(tipi_storico)
+
 ```
-# 4.a Grafico a torta tipi attività (anno specifico)
+
+### 6.1 Grafico a torta tipi attività (per anno specifico)
+Osserviamo ora in un intervallo temporale ridotto ad un anno specifico.
 ```{r}
-anno_richiesto = 2017    #anno passato esplicitamente
+anno_richiesto = 2015    #anno passato esplicitamente
 data_min = paste(anno_richiesto, "-01-01", sep="")  #es. 2021-01-01
 data_max = paste(anno_richiesto, "-12-31", sep="")  #es. 2021-12-31
 
@@ -388,17 +341,27 @@ data <- data %>%
 data$label <- scales::percent(data$per)
 
 #Plot
-ggplot(data=data)+
+tipi_anno = ggplot(data=data)+
   geom_bar(aes(x="", y=per, fill=nome_tipo_attivita), stat="identity", width = 1)+
   coord_polar("y", start=0)+
   theme_void()+
   geom_text(aes(x=1, y = cumsum(per) - per/2, label=label))+
   ggtitle(paste("Distribuzione tipi attività nel", anno_richiesto)) +
   guides(fill=guide_legend(title="Tipi Attività"))
+
+show(tipi_anno)
 ```
 
-# 5a Istogramma disponibilita per mese
-```{r}
+### 6.2 Confronto tipi di attività
+Questo confronto è molto utile, e può rivelare informazioni chiave. Purtroppo per ragioni di privacy non possiamo mostrare dati reali, ma sarabbe stato molto interessante notare lo scostamento dei tipi di attività nel 2020 rispetto allo storico. A causa dell'emergenza Covid-19 gli addestramenti e le altre attività hanno lasciato largo spazio alle attività in emergenza a supporto della popolazione nel periodo della pandemia. Un grafico sicuramente molto sbilanciato e improbabile nel resto dello storico.
+```{r fig.height = 5, fig.width = 10}
+grid.arrange(tipi_storico, tipi_anno, ncol=2)
+```
+
+
+## 7. Grafico disponibilita per mese
+Questo quadro aiuta molto il coordinatore a valutare eventuali strategie per migliorare l'esito di una richiesta di disponibilità. Infatti in seguito a una richiesta effettuata dal coordinatore i volontari possono rispondere con una disponibilità positiva (accettazione), o negativa (rifiuto). Un prospetto come questo permette a colpo d'occhio di rendersi conto se c'è qualcosa che non va. Nel caso di test qui generato notiamo che, a prescindere dal numero di disponibilità raccolte (che può variare anche in base ad altri fattori come ad esempio il numero di attività...), queste risultano essere quasi sempre leggermente più negative che positive. Sicuramente in un caso come questo si dovrebbe analizzare i motivi e comprendere più nel dettaglio i motivi di questo risultato (magari i volontari non si sentono a proprio agio a svolgere certe attività...).
+```{r fig.width=10}
 anno_richiesto = 2017    #anno passato esplicitamente
 data_min = paste(anno_richiesto, "-01-01", sep="")  #es. 2021-01-01
 data_max = paste(anno_richiesto, "-12-31", sep="")  #es. 2021-12-31
@@ -425,8 +388,9 @@ ggplot(disp_mese, aes(fill=disponibilita_positiva, y=numero, x=mese)) +
 
 ```
 
-# 5b Istogramma disponibilita per tipo attivita
-```{r}
+### 7.1 Grafico disponibilita per tipo attivita
+Il seguente grafico può aiutarci a completare il ragionamento iniziato al punto precedente. Sempre nell'ottica di comprendere le ragioni dell'esito della disponibilità ricevuta dai volontari, possiamo indagare come queste si distribuiscano in relazione al tipo di attività specifica. Ad esempio, se una certa attività dovesse essere molto squilibrata nelle disponibilità negative potremmo concludere che quel tipo specifico causa riluttanza nei volontari, e potremmo parlarne con loro per capirne i motivi e cercarne soluzioni operative.
+```{r fig.width=10}
   
 #raggruppo
 disp_tipo = disponibilita %>% 
@@ -442,8 +406,37 @@ ggplot(disp_tipo, aes(fill=disponibilita_positiva, y=numero, x=nome_tipo_attivit
     guides(fill=guide_legend(title="Tipo disponibilità")) 
 
 ```
-# 6 Radar distribuzione abilitazioni
-```{r}
+<br>Nel caso specifico di questo dataset generato, giungiamo alla conclusione che l'esito della disponibilità non dipende dal tipo dell'attività in quanto comunque le disponibiltà negative restano sempre leggermente maggiori di quelle positive. Ne traiamo invece, in merito al numero di disponibilità, che ad esempio le attività di formazione ne ricevono molte, mentre le attività AIB ben poche. Ma questo appunto può essere sempre legato alla frequenza con cui un certo tipo di attività si svolge durante l'anno. Andiamo a verificarne la distribuzione nel caso specifico dell'anno in questione:
+```{r fig.width=10}
+data = tbl(con, "attivita") %>% 
+  filter(timestamp_inizio_previsto >= as.Date(data_min) & timestamp_inizio_previsto <= as.Date(data_max)) %>% 
+  count(nome_tipo_attivita) %>% 
+  collect()
+
+# preparo dati per intabellamento
+data <- data %>% 
+  mutate(per=n/sum(n)) %>% 
+  arrange(desc(nome_tipo_attivita))
+
+# uso percentuali come label
+data$label <- scales::percent(data$per)
+
+#Plot
+tipi_anno = ggplot(data=data)+
+  geom_bar(aes(x="", y=per, fill=nome_tipo_attivita), stat="identity", width = 1)+
+  coord_polar("y", start=0)+
+  theme_void()+
+  geom_text(aes(x=1, y = cumsum(per) - per/2, label=label))+
+  ggtitle(paste("Distribuzione tipi attività nel", anno_richiesto)) +
+  guides(fill=guide_legend(title="Tipi Attività"))
+
+show(tipi_anno)
+```
+<br>Notiamo a colpo d'occhio che la nostra ipotesi è corretta: la distribuzione del numero delle disponibilità segue la distribuzione dei tipi delle attività. Nulla di strano quindi.
+
+## 8. Radar distribuzione abilitazioni 
+Il grafico a radar seguente chiarisce in modo rapido e intuitivo le abilità del gruppo comunale. In un'ottica futura di integrazione con gruppi comunali differenti, l'affiancamento del radar dei vari comuni potrebbe permettere alla Sala Operativa Regionale di chiamare a intervenire i comuni più adatti a una certa attività, basandosi sul livello di specializzazione delle abilitazioni.
+```{r fig.height=8}
 data = tbl(con, "ha_abilitazione") %>% 
   count(nome_abilitazione) %>% 
   collect() 
@@ -452,29 +445,40 @@ translated = data %>%
   spread(nome_abilitazione, n)
 
  
-# To use the fmsb package, I have to add 2 lines to the dataframe: the max and min of each topic to show on the plot!
-translated <- rbind(rep(max(data$n),nrow(data)) , rep(min(data$n),nrow(data)) , translated)
- 
-# Check your data, it has to look like this!
-head(translated)
+# aggiungo 2 righe per indicare la soglia minima e massima
+translated <- rbind(rep(max(data$n),nrow(data)) , rep(29,nrow(data)) , translated)
 
 #radar chart 
 radarchart( translated  , axistype=1 , 
  
-    #custom polygon
+    #impostazioni poligono
     pcol=rgb(0.2,0.5,0.5,0.9) , pfcol=rgb(0.2,0.5,0.5,0.5) , plwd=4 , 
  
-    #custom the grid
-    cglcol="grey", cglty=1, axislabcol="grey", caxislabels=seq(min(data$n),max(data$n),3), cglwd=0.8,
+    #impostazioni griglia
+    cglcol="grey", cglty=1, axislabcol="grey", caxislabels=seq(29,max(data$n), 4), cglwd=0.8,
  
-    #custom labels
-    vlcex=0.7
+    #impostazioni labels
+    vlcex=1
     )
 ```
 
+### 8.1 Ricerca persone abilitate
+Il seguente datatable può essere fondamentale per il coordinatore per raccogliere rapidamente i nominativi dei volontari abilitati a una certa attività
+```{r}
+abilitazioni = tbl(con, "ha_abilitazione") %>% 
+  inner_join(tbl(con, "persona")) %>% 
+  collect() %>% 
+  unite(nome_cognome, nome, cognome, sep=" ") %>% 
+  group_by(nome_abilitazione) %>% 
+  summarise(numero = n(), volontari = paste(c(nome_cognome), collapse=', ' ))
+
+datatable(abilitazioni %>% select("abilitazione" = nome_abilitazione, numero, volontari))
+
+```
 
 
-# 6 istogramma con numero persone per abilitazione
+## 9. Grafico con numero persone per abilitazione
+Il grafico seguente può risultare fondamentale per il manager formativo del gruppo comunale, a chiarificazione del grafico radar, per capire quali abilitazioni sono carenti, e promuovere la formazione del gruppo in quel settore. 
 ```{r}
 abilitazioni = tbl(con, "ha_abilitazione") %>% 
   count(nome_abilitazione) %>% 
@@ -486,7 +490,9 @@ ggplot(abilitazioni, aes(fill=nome_abilitazione, y=n, x=reorder(nome_abilitazion
     guides(fill=FALSE) + 
     coord_flip()
 ```
-# 6b istogramma con numero abilitazioni per persona
+
+### 9.1 istogramma con numero abilitazioni per persona
+Sempre nell'ottica di agevolare il lavoro del manager formativo, si presenta il grafico che mostra il numero di abilitazioni per persona. Si può così individuare quei volontari che hanno poca propensione alla formazione, ed eventualmente contattarli per capire il perchè delle loro scelte.
 ```{r}
 abilitazioni_persona = tbl(con, "ha_abilitazione") %>% 
   count(numero_tessera) %>% 
@@ -503,32 +509,35 @@ ggplot(abilitazioni_persona, aes(fill=nome_cognome, y=n, x=reorder(nome_cognome,
     coord_flip()
 ```
 
-# 7 grafico a torta con quantità dei consumabili
+## 10. Grafico a torta con quantità dei consumabili
+Il seguente grafico a torta mostra lo stato attuale dei materiali consumabili (carburanti) presenti in magazzino al momento dell'ultima misurazione effettuata. L'unità di misura considerata sono i litri.
 ```{r}
 
 consumabili = tbl(con, "attrezzatura_consumabile") %>% 
-  collect()
+  collect() %>% 
+  subset(id_attrezzatura != 5)
 
 # preparo dati per intabellamento
 data <- consumabili %>% 
-  mutate(per=quantita_ultima_misurazione/sum(quantita_ultima_misurazione)) %>% 
   arrange(desc(nome_attrezzatura))
 
-# uso percentuali come label
-data$label <- scales::percent(data$per)
+# uso quantità come label
+data$label <- data$quantita_ultima_misurazione
 
 #Plot
 ggplot(data=data)+
-  geom_bar(aes(x="", y=per, fill=nome_attrezzatura), stat="identity", width = 1)+
+  geom_bar(aes(x="", y=quantita_ultima_misurazione, fill=nome_attrezzatura), stat="identity", width = 1)+
   coord_polar("y", start=0)+
   theme_void()+
-  geom_text(aes(x=1, y = cumsum(per) - per/2, label=label))+
+  geom_text(aes(x=1, y = cumsum(quantita_ultima_misurazione) - quantita_ultima_misurazione/2, label=label))+
   ggtitle("Quantità dei consumabili a magazzino") +
   guides(fill=guide_legend(title="Tipo attrezzatura"))
 ```
 
-# 8 istogramma del numero dei non consumabili
-```{r}
+## 11. Grafico del numero dei non consumabili 
+Sarebbe stato interessante proporre un grafico a torta anche per i materiali non consumabili. Tuttavia questi risultano molto più numerosi e il grafico a torta risulterebbe incomprensibile. Una soluzione è stata trovata usando un barplot come questo. Alternativamente sarebbe interessante, modificando il db, raggruppare i materiali non consumabili per categorie. A quel punto, riducendosi il numero si potrebbe proporre un grafico a torta per ogni categoria.<br>
+Ad ogni modo, lo scopo finale è sempre sapere se i materiali sono disponibili, e in che quantità. Può essere utile prima di un intervento, oppure in fase di pianificazione dell'inventario del magazzino o della nuova campagna acquisti materiali.
+```{r fig.height=8}
 
 non_consumabili = tbl(con, "attrezzatura_non_consumabile") %>% 
   filter(is.na(data_fine_esistenza)) %>% #tengo solo attrezzature attive
@@ -545,37 +554,9 @@ ggplot(non_consumabili, aes(x=reorder(nome_attrezzatura, n), y=n, fill=nome_attr
 
 ```
 
-# 8 Datatable numero dei non consumabili
+### 11.1 Datatable numero dei non consumabili
+Viste le consderazioni al punto sopra, si è ritenuto comunque opportuno fornire un datatable per consultare i dati in maniera più comoda e rapida.
 ```{r}
-datatable(non_consumabili)
-```
-
-# HA POCO SENSO... QUASI MAI ESTERNI Tipi di persone per attività (ultime n attività)
-```{r}
-nAttivita = 15
-
-attivita = tbl(con, "attivita_completata") %>% 
-  arrange(desc(as.Date(timestamp_inizio_effettivo))) %>% 
-  head(nAttivita) %>% 
-  left_join(tbl(con, "partecipazione"))
-
-persone_esterne = attivita %>% 
-  inner_join(tbl(con, "persona_esterna")) %>% 
-  collect()
-
-persone_interne = attivita %>% 
-  inner_join(tbl(con, "persona")) %>% 
-  collect()
-
-# Grouped
-ggplot(disp_mese, aes(fill=disponibilita_positiva, y=numero, x=mese)) + 
-    geom_bar(position="dodge", stat="identity") +
-    labs(title = "Distribuzione temporale disponibilità", x = "Mese", y = "Numero disponibilità") +
-    guides(fill=guide_legend(title="Tipo disponibilità"))
-```
-
-# 9 lineplot con il numero di attività nel tempo per persona
-```{r}
-
+datatable(non_consumabili %>% select("Nome attrezzatura" = nome_attrezzatura, "Numero" = n))
 ```
 
