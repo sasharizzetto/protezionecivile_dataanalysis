@@ -1,6 +1,10 @@
 install.packages("dbplyr")
 install.packages("RPostgreSQL")
 install.packages("DT")
+install.packages("gifski")
+install.packages("png")
+install.packages("fmsb")
+install.packages("gridExtra")
 
 library(dplyr)
 library(RPostgreSQL)
